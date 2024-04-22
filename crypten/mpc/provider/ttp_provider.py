@@ -350,3 +350,19 @@ class TTPServer:
         rA = rB - self._get_additive_PRSS(size, remove_rank=True)
 
         return rA
+
+    def generate_one_hot(self, tensor_size, lut_size, device=None):
+        """Generate lookup table vectors of given sizes"""
+        print('TTP generate_one_hot')
+   
+        lut_size = lut_size[0]
+        print("TFP: Generate One Hot")
+        r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
+        one_hot = []
+        for i in range(lut_size):
+            one_hot.append((r == i) * 1)
+        one_hot = torch.stack(one_hot)
+        one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
+        r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
+        return r_shares, one_hot
+

@@ -481,6 +481,15 @@ class ArithmeticSharedTensor:
         assert is_float_tensor(y), "Unsupported type for div_: %s" % type(y)
         return self.mul_(y.reciprocal())
 
+    def mod(self, y):
+        """
+        Modulo of two tensors element-wise:
+        self % y = self - y * (self // y)
+        """
+        divisor = self.div(y)
+        remainder = self - divisor * y
+        return remainder
+
     def matmul(self, y):
         """Perform matrix multiplication using some tensor"""
         return self._arithmetic_function(y, "matmul")
@@ -602,6 +611,14 @@ class ArithmeticSharedTensor:
     def square(self):
         return self.clone().square_()
 
+    def evaluate_lut(self, lut):
+        """....TODO"""
+        print("ArithmeticSharedTensor evaluate_lut", lut)
+        
+        protocol = globals()[cfg.mpc.protocol]
+        self.share = protocol.evaluate_lut(self, lut).share
+        return self
+
     def where(self, condition, y):
         """Selects elements from self or y based on condition
 
@@ -658,6 +675,7 @@ class ArithmeticSharedTensor:
     __truediv__ = div
     __itruediv__ = div_
     __neg__ = neg
+    __mod__ = mod
 
     def __rsub__(self, tensor):
         """Subtracts self from tensor."""

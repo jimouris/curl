@@ -52,7 +52,7 @@ def exp(self):
     return result
 
 
-def log(self, input_in_01=False):
+def log(self, input_in_01=False, use_lut=False):
     r"""
     Approximates the natural logarithm using 8th order modified
     Householder iterations. This approximation is accurate within 2% relative
@@ -92,16 +92,32 @@ def log(self, input_in_01=False):
     exp_iterations = cfg.functions.log_exp_iterations
     order = cfg.functions.log_order
 
-    term1 = self.div(120)
-    term2 = exp(self.mul(2).add(1.0).neg()).mul(20)
-    y = term1 - term2 + 3.0
+    if use_lut:
+        print("\nIn log")
+        upper_bound = 2**4
+        precision = 2**16
+        trunc_size = 2**6
+        lut_size = upper_bound * precision // trunc_size
+        lut = torch.tensor([0] + [int(precision * math.log(trunc_size * i / precision)) for i in range(1, lut_size)])
+        print("self:", self)
+        y = self.div(trunc_size)
+        print("Div of y:", y)
+        x = y.mod(lut_size)
+        print("Modulo of x:", x)
+        result = x.evaluate_lut(lut)
 
-    # 8th order Householder iterations
-    with cfg.temp_override({"functions.exp_iterations": exp_iterations}):
-        for _ in range(iterations):
-            h = 1 - self * exp(-y)
-            y -= h.polynomial([1 / (i + 1) for i in range(order)])
-    return y
+        return result
+    else:
+        term1 = self.div(120)
+        term2 = exp(self.mul(2).add(1.0).neg()).mul(20)
+        y = term1 - term2 + 3.0
+
+        # 8th order Householder iterations
+        with cfg.temp_override({"functions.exp_iterations": exp_iterations}):
+            for _ in range(iterations):
+                h = 1 - self * exp(-y)
+                y -= h.polynomial([1 / (i + 1) for i in range(order)])
+        return y
 
 
 def reciprocal(self, input_in_01=False):

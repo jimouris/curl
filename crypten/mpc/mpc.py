@@ -304,6 +304,11 @@ class MPCTensor(CrypTensor):
         result._tensor.div_(y)
         return result
 
+    def evaluate_lut(self, lut):
+        """TODO"""
+        print("MPCTensor evaluate_lut", lut)
+        result = self.clone()
+        return result._tensor.evaluate_lut(lut)
 
 UNARY_FUNCTIONS = [
     "avg_pool2d",
@@ -312,6 +317,7 @@ UNARY_FUNCTIONS = [
 ]
 
 BINARY_FUNCTIONS = [
+    "mod",
     "add",
     "sub",
     "mul",

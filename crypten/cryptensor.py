@@ -122,6 +122,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         "conv2d",
         "copy_",
         "div_",
+        "mod",
         "matmul",
         "neg",
     ]
@@ -141,6 +142,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         "__mul__": "mul",
         "__rmul__": "mul",
         "__div__": "div",
+        "__mod__": "mod",
         "__truediv__": "div",
         "__rtruediv__": "__rtruediv__",
         "__matmul__": "matmul",
@@ -505,6 +507,10 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
     def __div__(self, tensor):
         """Element-wise divide by a tensor."""
         return self.div(tensor)
+    
+    def __mod__(self, tensor):
+        """Element-wise modulo by a tensor."""
+        return self.mod(tensor)
 
     def __truediv__(self, scalar):
         """Element-wise divide by a tensor."""
