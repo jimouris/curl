@@ -6,6 +6,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import numpy as np
+import pywt
 
 import crypten
 import torch
@@ -29,6 +31,153 @@ __all__ = [
     "log_softmax",
 ]
 
+class LookupTables:
+
+    LUTs = {}
+
+    """Use to create a singleton"""
+    def __new__(cls, *args, **kwds):
+        """
+        >>> s = Singleton()
+        >>> p = Singleton()
+        >>> id(s) == id(p)
+        True
+        """
+        it_id = "__it__"
+        # getattr will dip into base classes, so __dict__ must be used
+        it = cls.__dict__.get(it_id, None)
+        if it is not None:
+            return it
+        it = object.__new__(cls)
+        setattr(cls, it_id, it)
+        it.init(*args, **kwds)
+        it.initialize_luts()
+        return it
+
+    def init(self, *args, **kwds):
+        pass
+
+    @classmethod
+    def generate_lut(cls, precision, lut_max_element, lut_truncation_bits, function, name):
+        full = function(np.linspace(1.0/precision, lut_max_element, lut_max_element * precision))
+        coeffs, *_ = pywt.wavedec(full, 'haar', level=lut_truncation_bits)
+        cls.LUTs[name] = torch.tensor(coeffs * 2**(-lut_truncation_bits/2) * precision).long()
+
+    @classmethod
+    def initialize_luts(cls):
+        r"""Initialize LUTs for different approximation functions:
+            * exp: Exponential
+            * log: Logarithm
+            * reciprocal: Reciprocal
+            * sqrt: Square root
+            * inv_sqrt: Inverse square root
+            * sin: Sine
+            * cos: Cosine
+            * sigmoid: Sigmoid 
+            * tanh: hyperbolic tangent function
+            * erf: Error function
+        """
+        lut_precision = 2**cfg.encoder.precision_bits
+
+        """Exp LUT"""
+        if cfg.functions.exp_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.exp_lut_max_element, 
+                             cfg.functions.exp_lut_truncation_bits, 
+                             np.exp,
+                             "exp")
+
+            size = cfg.functions.exp_neg_lut_size
+            full = np.exp(-np.linspace(1.0/size, 1/2**4, size))
+            cls.LUTs['nexp_low'] = torch.tensor(full * lut_precision).long()
+            full = np.exp(-np.linspace(1.0*2**4/size, 2**4, size))
+            cls.LUTs['nexp_high'] = torch.tensor(full * lut_precision).long()
+
+        """Logarithm LUT"""
+        if cfg.functions.log_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.log_lut_max_element, 
+                             cfg.functions.log_lut_truncation_bits, 
+                             np.log,
+                             "log")
+
+        """Reciprocal LUT"""
+        if cfg.functions.reciprocal_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.reciprocal_lut_max_element, 
+                             cfg.functions.reciprocal_lut_truncation_bits, 
+                             np.reciprocal,
+                             "reciprocal")
+
+        """Sqrt LUT"""
+        if cfg.functions.sqrt_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.sqrt_lut_max_element, 
+                             cfg.functions.sqrt_lut_truncation_bits, 
+                             np.sqrt,
+                             "sqrt")
+
+        """Inv Sqrt LUT"""
+        if cfg.functions.inv_sqrt_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.inv_sqrt_lut_max_element, 
+                             cfg.functions.inv_sqrt_lut_truncation_bits, 
+                             lambda x: np.reciprocal(np.sqrt(x)),
+                             "inv_sqrt")
+
+        """Trigonometry LUTs: Sin, Cos"""
+        if cfg.functions.trigonometry_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.trigonometry_lut_max_element, 
+                             cfg.functions.trigonometry_lut_truncation_bits, 
+                             np.sin,
+                             "sin")
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.trigonometry_lut_max_element, 
+                             cfg.functions.trigonometry_lut_truncation_bits, 
+                             np.cos,
+                             "cos")
+
+        """Sigmoid LUT"""
+        if cfg.functions.sigmoid_tanh_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.sigmoid_lut_max_element, 
+                             cfg.functions.sigmoid_lut_truncation_bits, 
+                             lambda x: 1/(1 + np.exp(-x)),
+                             "sigmoid")
+
+        """Tanh LUT"""
+        if cfg.functions.sigmoid_tanh_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.tanh_lut_max_element, 
+                             cfg.functions.tanh_lut_truncation_bits, 
+                             np.tanh,
+                             "tanh")
+
+        """Erf LUT"""
+        if cfg.functions.erf_method == "lut":
+            cls.generate_lut(lut_precision, 
+                             cfg.functions.erf_lut_max_element, 
+                             cfg.functions.erf_lut_truncation_bits, 
+                             lambda x: np.array([math.erf(x_) for x_ in x]),
+                             "erf")
+
+
+def _nexp_lut(self):
+    r"""Approximates the negative exponential function using a limit approximation"""
+    luts = LookupTables()
+    precision = 2**cfg.encoder.precision_bits
+    size = cfg.functions.exp_neg_lut_size
+
+    x = self.div(precision/2**4/size)
+    d = x < 2**16
+    c = d * x + (1-d) * (2**16-1)
+    c0 = c # c0 = c.mod(size)
+    c1 = c.div(size)
+    t0 = c0.evaluate_lut(luts.LUTs["nexp_low"])
+    t1 = c1.evaluate_lut(luts.LUTs["nexp_high"])
+    return t0 * t1
+
 
 # Iterative methods:
 def exp(self):
@@ -44,12 +193,22 @@ def exp(self):
     Set the number of iterations for the limit approximation with
     config.exp_iterations.
     """  # noqa: W605
-    iters = cfg.functions.exp_iterations
+    method = cfg.functions.exp_method
 
-    result = 1 + self.div(2**iters)
-    for _ in range(iters):
-        result = result.square()
-    return result
+    if method == "lut":
+        if cfg.functions.exp_all_neg:
+            return _nexp_lut(-self)
+        luts = LookupTables()
+        y = self.div(2**cfg.functions.exp_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["exp"])
+    elif method == "limit":
+        iters = cfg.functions.exp_iterations
+        result = 1 + self.div(2**iters)
+        for _ in range(iters):
+            result = result.square()
+        return result
+    else:
+        raise ValueError(f"Invalid method {method} given for exp function")
 
 
 def log(self, input_in_01=False, use_lut=False):
@@ -91,23 +250,14 @@ def log(self, input_in_01=False, use_lut=False):
     iterations = cfg.functions.log_iterations
     exp_iterations = cfg.functions.log_exp_iterations
     order = cfg.functions.log_order
+    method = cfg.functions.log_method
 
-    if use_lut:
-        print("\nIn log")
-        upper_bound = 2**4
-        precision = 2**16
-        trunc_size = 2**6
-        lut_size = upper_bound * precision // trunc_size
-        lut = torch.tensor([0] + [int(precision * math.log(trunc_size * i / precision)) for i in range(1, lut_size)])
-        print("self:", self)
-        y = self.div(trunc_size)
-        print("Div of y:", y)
-        x = y.mod(lut_size)
-        print("Modulo of x:", x)
-        result = x.evaluate_lut(lut)
+    if method == "lut":
+        luts = LookupTables()
 
-        return result
-    else:
+        y = self.div(2**cfg.functions.log_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["log"])
+    elif method == "iter":
         term1 = self.div(120)
         term2 = exp(self.mul(2).add(1.0).neg()).mul(20)
         y = term1 - term2 + 3.0
@@ -118,7 +268,8 @@ def log(self, input_in_01=False, use_lut=False):
                 h = 1 - self * exp(-y)
                 y -= h.polynomial([1 / (i + 1) for i in range(order)])
         return y
-
+    else:
+        raise ValueError(f"Invalid method {method} given for log function")
 
 def reciprocal(self, input_in_01=False):
     r"""
@@ -136,7 +287,7 @@ def reciprocal(self, input_in_01=False):
                 :math:`x^{-1} = exp(-log(x))`
 
     Configuration params:
-        reciprocal_method (str):  One of 'NR' or 'log'.
+        reciprocal_method (str):  One of 'NR' or 'log' or 'lut'.
         reciprocal_nr_iters (int):  determines the number of Newton-Raphson iterations to run
                         for the `NR` method
         reciprocal_log_iters (int): determines the number of Householder
@@ -169,7 +320,11 @@ def reciprocal(self, input_in_01=False):
         with cfg.temp_override(pos_override):
             return sgn * reciprocal(pos)
 
-    if method == "NR":
+    if method == "lut":
+        luts = LookupTables()
+        y = self.div(2**cfg.functions.reciprocal_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["reciprocal"])
+    elif method == "NR":
         nr_iters = cfg.functions.reciprocal_nr_iters
         if initial is None:
             # Initialization to a decent estimate (found by qualitative inspection):
@@ -206,19 +361,27 @@ def inv_sqrt(self):
     """
     initial = cfg.functions.sqrt_nr_initial
     iters = cfg.functions.sqrt_nr_iters
+    method = cfg.functions.inv_sqrt_method
 
-    # Initialize using decent approximation
-    if initial is None:
-        y = exp(self.div(2).add(0.2).neg()).mul(2.2).add(0.2)
-        y -= self.div(1024)
+    if method == "lut":
+        luts = LookupTables()
+
+        y = self.div(2**cfg.functions.inv_sqrt_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["inv_sqrt"])
+    elif method == "NR":
+        # Initialize using decent approximation
+        if initial is None:
+            y = exp(self.div(2).add(0.2).neg()).mul(2.2).add(0.2)
+            y -= self.div(1024)
+        else:
+            y = initial
+
+        # Newton Raphson iterations for inverse square root
+        for _ in range(iters):
+            y = y.mul_(3 - self * y.square()).div_(2)
+        return y
     else:
-        y = initial
-
-    # Newton Raphson iterations for inverse square root
-    for _ in range(iters):
-        y = y.mul_(3 - self * y.square()).div_(2)
-    return y
-
+        raise ValueError(f"Invalid method {method} given for inv_sqrt function")
 
 def sqrt(self):
     r"""
@@ -234,7 +397,17 @@ def sqrt(self):
     .. _Newton-Raphson:
         https://en.wikipedia.org/wiki/Fast_inverse_square_root#Newton's_method
     """
-    return inv_sqrt(self).mul_(self)
+    method = cfg.functions.sqrt_method
+
+    if method == "lut":
+        luts = LookupTables()
+
+        y = self.div(2**cfg.functions.sqrt_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["sqrt"])
+    elif method == "NR":
+        return inv_sqrt(self).mul_(self)
+    else:
+        raise ValueError(f"Invalid method {method} given for sqrt function")
 
 
 def _eix(self):
@@ -267,7 +440,13 @@ def cossin(self):
     Args:
         iterations (int): for approximating exp(i * x)
     """
-    return self._eix()
+    method = cfg.functions.trigonometry_method
+    if method == "lut":
+        return cos(self), sin(self)
+    elif method == "NR":
+        return self._eix()
+    else:
+        raise ValueError(f"Invalid method {method} given for cossin function")
 
 
 def cos(self):
@@ -276,7 +455,16 @@ def cos(self):
     Args:
         iterations (int): for approximating exp(i * x)
     """
-    return cossin(self)[0]
+    method = cfg.functions.trigonometry_method
+    if method == "lut":
+        luts = LookupTables()
+
+        y = self.div(2**cfg.functions.trigonometry_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["cos"])
+    elif method == "NR":
+        return cossin(self)[0]
+    else:
+        raise ValueError(f"Invalid method {method} given for cos function")
 
 
 def sin(self):
@@ -285,7 +473,16 @@ def sin(self):
     Args:
         iterations (int): for approximating exp(i * x)
     """
-    return cossin(self)[1]
+    method = cfg.functions.trigonometry_method
+    if method == "lut":
+        luts = LookupTables()
+
+        y = self.div(2**cfg.functions.trigonometry_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["sin"])
+    elif method == "NR":
+        return cossin(self)[1]
+    else:
+        raise ValueError(f"Invalid method {method} given for sin function")
 
 
 # Logistic Functions
@@ -310,7 +507,12 @@ def sigmoid(self):
     """  # noqa: W605
     method = cfg.functions.sigmoid_tanh_method
 
-    if method == "chebyshev":
+    if method == "lut":
+        luts = LookupTables()
+
+        y = self.div(2**cfg.functions.sigmoid_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["sigmoid"])
+    elif method == "chebyshev":
         tanh_approx = tanh(self.div(2))
         return tanh_approx.div(2) + 0.5
     elif method == "reciprocal":
@@ -360,8 +562,13 @@ def tanh(self):
                         Must be even and at least 6.
     """
     method = cfg.functions.sigmoid_tanh_method
+        
+    if method == "lut":
+        luts = LookupTables()
 
-    if method == "reciprocal":
+        y = self.div(2**cfg.functions.tanh_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["tanh"])
+    elif method == "reciprocal":
         return self.mul(2).sigmoid().mul(2).sub(1)
     elif method == "chebyshev":
         terms = cfg.functions.sigmoid_tanh_terms
@@ -408,19 +615,28 @@ def _chebyshev_polynomials(self, terms):
     return crypten.stack(polynomials)
 
 
-def erf(tensor):
+def erf(self):
     r"""
     Approximates the error function of the input tensor using a Taylor approximation.
     """
-    iters = cfg.functions.erf_iterations
+    method = cfg.functions.erf_method
 
-    output = tensor.clone()
-    for n in range(1, iters + 1):
-        multiplier = ((-1) ** n) / (math.factorial(n) * (2 * n + 1))
-        output = output.add(tensor.pos_pow(2 * n + 1).mul(multiplier))
-    return output.mul(2.0 / math.sqrt(math.pi))
-    # NOTE: This approximation is not unstable for large tensor values.
+    if method == "lut":
+        luts = LookupTables()
 
+        y = self.div(2**cfg.functions.erf_lut_truncation_bits) # get rid of LSBs
+        return y.evaluate_lut(luts.LUTs["erf"])
+    elif method == "Taylor":
+        iters = cfg.functions.erf_iterations
+
+        output = self.clone()
+        for n in range(1, iters + 1):
+            multiplier = ((-1) ** n) / (math.factorial(n) * (2 * n + 1))
+            output = output.add(self.pos_pow(2 * n + 1).mul(multiplier))
+        return output.mul(2.0 / math.sqrt(math.pi))
+        # NOTE: This approximation is not unstable for large tensor values.
+    else:
+        raise ValueError(f"Unrecognized method {method} for erf")
 
 def softmax(self, dim, **kwargs):
     r"""Compute the softmax of a tensor's elements along a given dimension"""
@@ -434,7 +650,8 @@ def softmax(self, dim, **kwargs):
 
     maximum_value = self.max(dim, keepdim=True)[0]
     logits = self - maximum_value
-    numerator = logits.exp()
+    with cfg.temp_override({"functions.exp_all_neg": True}):
+        numerator = logits.exp()
     with cfg.temp_override({"functions.reciprocal_all_pos": True}):
         inv_denominator = numerator.sum(dim, keepdim=True).reciprocal()
     return numerator * inv_denominator

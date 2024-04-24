@@ -14,6 +14,7 @@ import os
 import warnings
 
 import crypten.common  # noqa: F401
+import crypten.common.functions
 import crypten.communicator as comm
 import crypten.config  # noqa: F401
 import crypten.mpc  # noqa: F401
@@ -71,6 +72,8 @@ def init(config_file=None, party_name=None, device=None):
     # Setup party name for file save / load
     if party_name is not None:
         comm.get().set_name(party_name)
+
+    crypten.common.functions.approximations.LookupTables()
 
     # Setup seeds for Random Number Generation
     if comm.get().get_rank() < comm.get().get_world_size():

@@ -90,7 +90,6 @@ class TrustedFirstParty(TupleProvider):
 
         """
         lut_size = lut_size[0]
-        print("TFP: Generate One Hot")
         r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
         one_hot = []
         for i in range(lut_size):

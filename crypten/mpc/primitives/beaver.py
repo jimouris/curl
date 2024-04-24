@@ -171,22 +171,16 @@ def evaluate_lut(x, lut):
     """TODO 
     lut is a public tensor
     """
-    print("beaver.py: evaluate_lut x", x.reveal(), " lut:", lut)
     provider = crypten.mpc.get_default_provider()
-    print("size", x.size(), lut.size())
     r, one_hot_r = provider.generate_one_hot(x.size(), lut.size())
-    print("beaver.py: evaluate_lut: one_hot", one_hot_r)
-    print("beaver.py: evaluate_lut: r", r)
     with IgnoreEncodings([x, r]):
         shift_amount = (x - r).reveal()
-    print("beaver.py: evaluate_lut: diff", shift_amount)
 
     result = x.clone()
     for i in range(one_hot_r.size()[0]):
         rotated_lut = torch.roll(lut, -int(shift_amount[i]))
         lookup = one_hot_r[i] * rotated_lut
         result[i] = lookup.sum()
-    print("beaver.py result", result)
     return result
 
 def AND(x, y):

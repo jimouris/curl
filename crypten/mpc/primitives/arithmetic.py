@@ -613,8 +613,6 @@ class ArithmeticSharedTensor:
 
     def evaluate_lut(self, lut):
         """....TODO"""
-        print("ArithmeticSharedTensor evaluate_lut", lut)
-        
         protocol = globals()[cfg.mpc.protocol]
         self.share = protocol.evaluate_lut(self, lut).share
         return self

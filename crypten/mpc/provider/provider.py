@@ -11,7 +11,6 @@ import crypten
 import crypten.communicator as comm
 import torch
 
-
 class TupleProvider:
     TRACEABLE_FUNCTIONS = [
         "generate_additive_triple",

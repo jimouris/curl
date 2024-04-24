@@ -353,10 +353,7 @@ class TTPServer:
 
     def generate_one_hot(self, tensor_size, lut_size, device=None):
         """Generate lookup table vectors of given sizes"""
-        print('TTP generate_one_hot')
-   
         lut_size = lut_size[0]
-        print("TFP: Generate One Hot")
         r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
         one_hot = []
         for i in range(lut_size):

@@ -305,8 +305,7 @@ class MPCTensor(CrypTensor):
         return result
 
     def evaluate_lut(self, lut):
-        """TODO"""
-        print("MPCTensor evaluate_lut", lut)
+        r"""Evaluate a look-up table (LUT) on the input tensor."""
         result = self.clone()
         return result._tensor.evaluate_lut(lut)
 
