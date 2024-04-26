@@ -9,17 +9,17 @@ functions:
   max_method: "log_reduction"
 
   # exponential function
-  exp_method: "limit"
-  # exp_method: "lut"
+  # exp_method: "limit"
+  exp_method: "lut"
   exp_iterations: 8
   exp_lut_truncation_bits: 6
   exp_lut_max_element: 16 # 2^4
-  exp_all_neg: False
+  exp_all_neg: True
   exp_neg_lut_size: 256 # 2^8
 
   # reciprocal configuration
-  reciprocal_method: "NR"
-  # reciprocal_method: "lut"
+  # reciprocal_method: "NR"
+  reciprocal_method: "lut"
   reciprocal_nr_iters: 10
   reciprocal_log_iters: 1
   reciprocal_all_pos: False
@@ -28,22 +28,22 @@ functions:
   reciprocal_lut_max_element: 16 # 2^4
 
   # sqrt configuration
-  sqrt_method: "NR"
-  # sqrt_method: "lut"
+  # sqrt_method: "NR"
+  sqrt_method: "lut"
   sqrt_nr_iters: 3
   sqrt_nr_initial: null
   sqrt_lut_truncation_bits: 10
   sqrt_lut_max_element: 16 # 2^4
 
   # inv_sqrt configuration
-  inv_sqrt_method: "NR"
-  # inv_sqrt_method: "lut"
+  # inv_sqrt_method: "NR"
+  inv_sqrt_method: "lut"
   inv_sqrt_lut_truncation_bits: 10
   inv_sqrt_lut_max_element: 16 # 2^4
 
   # sigmoid / tanh configuration
-  sigmoid_tanh_method: "reciprocal"
-  # sigmoid_tanh_method: "lut"
+  # sigmoid_tanh_method: "reciprocal"
+  sigmoid_tanh_method: "lut"
   sigmoid_tanh_terms: 32
   sigmoid_lut_truncation_bits: 6
   sigmoid_lut_max_element: 16 # 2^4
@@ -51,24 +51,24 @@ functions:
   tanh_lut_max_element: 16 # 2^4
 
   # log configuration
-  log_method: "iter"
-  # log_method: "lut"
+  # log_method: "iter"
+  log_method: "lut"
   log_iterations: 2
   log_exp_iterations: 8
   log_order: 8
   log_lut_truncation_bits: 6
   log_lut_max_element: 16 # 2^4
-  
+
   # trigonometry configuration
-  trigonometry_method: "NR"
-  # trigonometry_method: "lut"
+  # trigonometry_method: "NR"
+  trigonometry_method: "lut"
   trigonometry_lut_truncation_bits: 10
   trigonometry_lut_max_element: 16 # 2^4
   trig_iterations: 10
 
   # error function configuration:
-  erf_method: "Taylor"
-  # erf_method: "lut"
+  # erf_method: "Taylor"
+  erf_method: "lut"
   erf_iterations: 8
   erf_lut_truncation_bits: 6
   erf_lut_max_element: 16 # 2^4

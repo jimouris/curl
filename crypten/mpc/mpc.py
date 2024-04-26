@@ -307,7 +307,8 @@ class MPCTensor(CrypTensor):
     def evaluate_lut(self, lut):
         r"""Evaluate a look-up table (LUT) on the input tensor."""
         result = self.clone()
-        return result._tensor.evaluate_lut(lut)
+        result._tensor.evaluate_lut(lut)
+        return result
 
 UNARY_FUNCTIONS = [
     "avg_pool2d",
