@@ -168,11 +168,21 @@ def truncate(x, y):
     return x
 
 def evaluate_lut(x, lut):
-    """TODO 
-    lut is a public tensor
+    """Evaluates a Look-Up Table (LUT) using an input tensor x.
+
+    Args:
+        x (torch.Tensor): Input tensor.
+        lut (torch.Tensor): Look-Up Table tensor.
+
+    Returns:
+        torch.Tensor: Result tensor after applying the LUT.
     """
     provider = crypten.mpc.get_default_provider()
+
+    # Generate one-hot vectors for each element of x
     r, one_hot_r = provider.generate_one_hot(x.size(), lut.size())
+
+    # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
         shift_amount = (x - r).reveal()
 
