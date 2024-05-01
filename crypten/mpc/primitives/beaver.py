@@ -185,12 +185,16 @@ def evaluate_lut(x, lut):
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
         shift_amount = (x - r).reveal()
-
-    result = x.clone()
-    for i in range(one_hot_r.size()[0]):
-        rotated_lut = torch.roll(lut, -int(shift_amount[i]))
-        lookup = one_hot_r[i] * rotated_lut
-        result[i] = lookup.sum()
+    
+    if shift_amount.size():
+        for i in range(shift_amount.size()[0]):
+            one_hot_r[i] = one_hot_r[i].roll(int(shift_amount[i]))
+        lookup = one_hot_r * lut
+        result = lookup.sum(dim=1)
+    else:
+        one_hot_r = one_hot_r.roll(int(shift_amount))
+        lookup = one_hot_r * lut
+        result = lookup.sum()
     return result
 
 def AND(x, y):
