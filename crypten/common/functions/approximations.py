@@ -127,38 +127,40 @@ class LookupTables:
 
         """Trigonometry LUTs: Sin, Cos"""
         if cfg.functions.trigonometry_method == "lut":
+            trig_limit = 8 # ~ 2 * pi
+            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_lut_size_bits
             cls.generate_lut(lut_precision, 
-                             cfg.functions.trigonometry_lut_max_element, 
-                             cfg.functions.trigonometry_lut_truncation_bits, 
+                             trig_limit, 
+                             trig_truncation,
                              np.sin,
                              "sin")
             cls.generate_lut(lut_precision, 
-                             cfg.functions.trigonometry_lut_max_element, 
-                             cfg.functions.trigonometry_lut_truncation_bits, 
+                             trig_limit,
+                             trig_truncation,
                              np.cos,
                              "cos")
 
-        """Sigmoid LUT"""
+        """Sigmoid & Tanh LUT"""
         if cfg.functions.sigmoid_tanh_method == "lut":
-            cls.generate_lut(lut_precision, 
-                             cfg.functions.sigmoid_lut_max_element, 
-                             cfg.functions.sigmoid_lut_truncation_bits, 
+            st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_lut_size_bits
+            cls.generate_lut(lut_precision,
+                             2**cfg.functions.sigmoid_lut_max_bits,
+                             st_truncation,
                              lambda x: 1/(1 + np.exp(-x)),
                              "sigmoid")
-
-        """Tanh LUT"""
-        if cfg.functions.sigmoid_tanh_method == "lut":
-            cls.generate_lut(lut_precision, 
-                             cfg.functions.tanh_lut_max_element, 
-                             cfg.functions.tanh_lut_truncation_bits, 
+            st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_lut_size_bits
+            cls.generate_lut(lut_precision,
+                             2**cfg.functions.tanh_lut_max_bits,
+                             st_truncation,
                              np.tanh,
                              "tanh")
 
         """Erf LUT"""
         if cfg.functions.erf_method == "lut":
+            erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_lut_size_bits
             cls.generate_lut(lut_precision, 
-                             cfg.functions.erf_lut_max_element, 
-                             cfg.functions.erf_lut_truncation_bits, 
+                             2**cfg.functions.erf_lut_max_bits, 
+                             erf_truncation, 
                              lambda x: np.array([math.erf(x_) for x_ in x]),
                              "erf")
 
@@ -458,9 +460,15 @@ def cos(self):
     method = cfg.functions.trigonometry_method
     if method == "lut":
         luts = LookupTables()
+        trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_lut_size_bits
+        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
 
-        y = self.div(2**cfg.functions.trigonometry_lut_truncation_bits) # get rid of LSBs
-        return y.evaluate_lut(luts.LUTs["cos"])
+        sgn = self.sign()
+        pos = sgn * self
+        mod = pos.mod(tau) 
+        msb = mod.div(2**trig_truncation)  # get rid of LSBs
+        lut = msb.evaluate_lut(luts.LUTs["cos"])
+        return lut
     elif method == "NR":
         return cossin(self)[0]
     else:
@@ -476,9 +484,15 @@ def sin(self):
     method = cfg.functions.trigonometry_method
     if method == "lut":
         luts = LookupTables()
+        trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_lut_size_bits
+        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
 
-        y = self.div(2**cfg.functions.trigonometry_lut_truncation_bits) # get rid of LSBs
-        return y.evaluate_lut(luts.LUTs["sin"])
+        sgn = self.sign()
+        pos = sgn * self
+        mod = pos.mod(tau)
+        msb = mod.div(2**trig_truncation)  # get rid of LSBs
+        lut = msb.evaluate_lut(luts.LUTs["sin"])
+        return lut * sgn
     elif method == "NR":
         return cossin(self)[1]
     else:
@@ -509,9 +523,18 @@ def sigmoid(self):
 
     if method == "lut":
         luts = LookupTables()
+        st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_lut_size_bits
 
-        y = self.div(2**cfg.functions.sigmoid_lut_truncation_bits) # get rid of LSBs
-        return y.evaluate_lut(luts.LUTs["sigmoid"])
+        ltz = self._ltz()
+        sign = 1 - 2 * ltz
+        abs = sign * self
+        check = abs < 2**cfg.functions.sigmoid_lut_max_bits
+        msb = abs.div(2**st_truncation) # get rid of LSBs
+        lut = msb.evaluate_lut(luts.LUTs["sigmoid"])
+        eval = 1 * ltz + sign * lut
+        limit = 1 - ltz
+        final = limit * (1-check) + eval * check
+        return final
     elif method == "chebyshev":
         tanh_approx = tanh(self.div(2))
         return tanh_approx.div(2) + 0.5
@@ -565,9 +588,15 @@ def tanh(self):
         
     if method == "lut":
         luts = LookupTables()
+        st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_lut_size_bits
 
-        y = self.div(2**cfg.functions.tanh_lut_truncation_bits) # get rid of LSBs
-        return y.evaluate_lut(luts.LUTs["tanh"])
+        sign = self.sign()
+        abs = sign * self
+        check = abs < 2**cfg.functions.tanh_lut_max_bits
+        msb = abs.div(2**st_truncation) # get rid of LSBs
+        lut = msb.evaluate_lut(luts.LUTs["tanh"])
+        final = sign * (1-check + lut * check)
+        return final
     elif method == "reciprocal":
         return self.mul(2).sigmoid().mul(2).sub(1)
     elif method == "chebyshev":
@@ -623,9 +652,15 @@ def erf(self):
 
     if method == "lut":
         luts = LookupTables()
+        erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_lut_size_bits
 
-        y = self.div(2**cfg.functions.erf_lut_truncation_bits) # get rid of LSBs
-        return y.evaluate_lut(luts.LUTs["erf"])
+        sign = self.sign()
+        abs = sign * self
+        check = abs < 2**cfg.functions.erf_lut_max_bits
+        msb = abs.div(2**erf_truncation) # get rid of LSBs
+        lut = msb.evaluate_lut(luts.LUTs["erf"])
+        final = sign * (1-check + lut * check)
+        return final
     elif method == "Taylor":
         iters = cfg.functions.erf_iterations
 
