@@ -8,3 +8,4 @@ tensorboard
 future
 scipy>=1.6.0
 scikit-learn
+pywavelets>=1.6.0
