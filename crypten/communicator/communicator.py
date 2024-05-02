@@ -5,16 +5,28 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import sys
+import logging
 import timeit
 
-from crypten.config import cfg
+import torch
 
 
 class Communicator:
     """
     Abstract class defining the functions that a Communicator should implement.
     """
+
+    # Determines whether communicators log communication stats
+    __verbosity = False
+
+    @classmethod
+    def is_verbose(cls):
+        return cls.__verbosity
+
+    @classmethod
+    def set_verbosity(cls, verbosity):
+        assert isinstance(verbosity, bool), "Verbosity must be a boolean value"
+        cls.__verbosity = verbosity
 
     @classmethod
     def is_initialized(cls):
@@ -110,35 +122,13 @@ class Communicator:
         self.comm_time = 0
 
     def print_communication_stats(self):
-        """
-        Prints communication statistics.
-
-        NOTE: Each party performs its own logging of communication, so one needs
-        to sum the number of bytes communicated over all parties and divide by
-        two (to prevent double-counting) to obtain the number of bytes
-        communicated in the overall system.
-        """
+        """Prints communication statistics."""
         import crypten
 
         crypten.log("====Communication Stats====")
         crypten.log("Rounds: {}".format(self.comm_rounds))
-        crypten.log("Bytes: {}".format(self.comm_bytes))
-        crypten.log("Communication time: {}".format(self.comm_time))
-
-    def get_communication_stats(self):
-        """
-        Returns communication statistics in a Python dict.
-
-        NOTE: Each party performs its own logging of communication, so one needs
-        to sum the number of bytes communicated over all parties and divide by
-        two (to prevent double-counting) to obtain the number of bytes
-        communicated in the overall system.
-        """
-        return {
-            "rounds": self.comm_rounds,
-            "bytes": self.comm_bytes,
-            "time": self.comm_time,
-        }
+        crypten.log("Bytes : {}".format(self.comm_bytes))
+        crypten.log("Comm time: {}".format(self.comm_time))
 
     def _log_communication(self, nelement):
         """Updates log of communication statistics."""
@@ -148,87 +138,64 @@ class Communicator:
     def _log_communication_time(self, comm_time):
         self.comm_time += comm_time
 
+    def get_generator(self, idx, device=None):
+        """
+        Get the corresponding RNG generator, as specified by its index and device
+
+        Args:
+            idx: The index of the generator, can be either 0 or 1
+            device: The device that the generator lives in.
+        """
+
+        if device is None:
+            device = torch.device("cpu")
+        else:
+            device = torch.device(device)
+
+        if idx not in {0, 1}:
+            raise RuntimeError(f"Generator idx {idx} out of bounds.")
+
+        generator_name = f"g{idx}_cuda" if device.type == "cuda" else f"g{idx}"
+        generator = getattr(self, generator_name, None)
+
+        if generator is None:
+            raise ValueError(
+                f"Generator {generator_name} is not initialized, call crypten.init() first"
+            )
+
+        return generator
+
 
 def _logging(func):
-    """
-    Decorator that performs logging of communication statistics.
+    """Decorator that performs logging of communication statistics."""
 
-    NOTE: Each party performs its own logging of communication, so one needs to
-    sum the number of bytes communicated over all parties and divide by two
-    (to prevent double-counting) to obtain the number of bytes communicated in
-    the overall system.
-    """
-    from functools import wraps
-
-    @wraps(func)
     def logging_wrapper(self, *args, **kwargs):
 
         # TODO: Replace this
         # - hacks the inputs into some of the functions for world_size 1:
-        world_size = self.get_world_size()
-        if world_size < 2:
+        if self.get_world_size() < 2:
             if func.__name__ in ["gather", "all_gather"]:
                 return [args[0]]
             elif len(args) > 0:
                 return args[0]
 
-        # only log communication if needed:
-        if cfg.communicator.verbose:
-            rank = self.get_rank()
-            _log = self._log_communication
-
-            # count number of bytes communicates for each MPI collective:
+        # only log if needed:
+        if self.is_verbose():
             if func.__name__ == "barrier":
-                _log(0)
-            elif func.__name__ in ["send", "recv", "isend", "irecv"]:
-                _log(args[0].nelement())  # party sends or receives tensor
-            elif func.__name__ == "scatter":
-                if args[1] == rank:  # party scatters P - 1 tensors
-                    nelements = sum(
-                        x.nelement() for idx, x in enumerate(args[0]) if idx != rank
-                    )
-                    _log(nelements)  # NOTE: We deal with other parties later
-            elif func.__name__ == "all_gather":
-                _log(2 * (world_size - 1) * args[0].nelement())
-                # party sends and receives P - 1 tensors
-            elif func.__name__ == "send_obj":
-                nbytes = sys.getsizeof(args[0])
-                _log(nbytes / self.BYTES_PER_ELEMENT)  # party sends object
-            elif func.__name__ == "broadcast_obj":
-                nbytes = sys.getsizeof(args[0])
-                _log(nbytes / self.BYTES_PER_ELEMENT * (world_size - 1))
-                # party sends object to P - 1 parties
-            elif func.__name__ in ["broadcast", "gather", "reduce"]:
-                multiplier = world_size - 1 if args[1] == rank else 1
-                # broadcast: party sends tensor to P - 1 parties, or receives 1 tensor
-                # gather: party receives P - 1 tensors, or sends 1 tensor
-                # reduce: party receives P - 1 tensors, or sends 1 tensor
-                if "batched" in kwargs and kwargs["batched"]:
-                    nelements = sum(x.nelement() for x in args[0])
-                    _log(nelements * multiplier)
-                else:
-                    _log(args[0].nelement() * multiplier)
-            elif func.__name__ == "all_reduce":
-                # each party sends and receives one tensor in ring implementation
-                if "batched" in kwargs and kwargs["batched"]:
-                    nelements = sum(2 * x.nelement() for x in args[0])
-                    _log(nelements)
-                else:
-                    _log(2 * args[0].nelement())
+                self._log_communication(0, 1)
+            elif func.__name__ == "scatter":  # N - 1 tensors communicated
+                self._log_communication(args[0][0].nelement() * (len(args[0]) - 1))
+            elif "batched" in kwargs and kwargs["batched"]:
+                nbytes = sum(x.nelement() for x in args[0])
+                self._log_communication(nbytes)
+            else:  # one tensor communicated
+                self._log_communication(args[0].nelement())
 
-            # execute and time the MPI collective:
             tic = timeit.default_timer()
             result = func(self, *args, **kwargs)
             toc = timeit.default_timer()
+
             self._log_communication_time(toc - tic)
-
-            # for some function, we only know the object size now:
-            if func.__name__ == "scatter" and args[1] != rank:
-                _log(result.nelement())  # party receives 1 tensor
-            if func.__name__ == "recv_obj":
-                _log(sys.getsizeof(result) / self.BYTES_PER_ELEMENT)
-                # party receives 1 object
-
             return result
 
         return func(self, *args, **kwargs)
