@@ -99,13 +99,13 @@ class LookupTables:
             depth = 1 + cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_haar_size_bits
             full = np.exp(np.linspace(-max_element, max_element-1.0/scale, 2 * max_element * scale))
             coeffs, *_ = pywt.wavedec(full, 'haar', level=depth)
-            cls.LUTs["expHaar"] = torch.tensor(coeffs * 2**(-depth/2) * scale).long()
+            cls.LUTs["exp_haar"] = torch.tensor(coeffs * 2**(-depth/2) * scale).long()
             # BIOR
             depth = 1 + cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_bior_size_bits
             coeffs, *_ = pywt.wavedec(full, 'bior2.2', level=depth)
             coeffs = coeffs[:2**cfg.functions.exp_bior_size_bits]
             coeffs = np.stack([np.roll(coeffs, -2), np.roll(coeffs, -3)])
-            cls.LUTs["expBior"] = torch.tensor(coeffs * scale).long()
+            cls.LUTs["exp_bior"] = torch.tensor(coeffs * scale).long()
             # NEXP
             size = cfg.functions.exp_neg_lut_size
             full = np.exp(-np.linspace(1.0/size, 1/2**4, size))
@@ -116,105 +116,105 @@ class LookupTables:
             cls.generate_haar(cfg.functions.exp_lut_max_bits, 
                               cfg.functions.exp_haar_size_bits,
                               lambda x: np.exp(-x),
-                              "nexpHaar")
+                              "nexp_haar")
             # NEXP-BIOR
             cls.generate_bior(cfg.functions.exp_lut_max_bits, 
                               cfg.functions.exp_bior_size_bits,
                               lambda x: np.exp(-x),
-                              "nexpBior")
+                              "nexp_bior")
 
         """Logarithm LUT"""
         if cfg.functions.log_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.log_lut_max_bits,
                               cfg.functions.log_haar_size_bits, 
                               np.log,
-                              "logHaar")
+                              "log_haar")
             cls.generate_bior(cfg.functions.log_lut_max_bits, 
                               cfg.functions.log_bior_size_bits,
                               np.log,
-                              "logBior")
+                              "log_bior")
 
         """Reciprocal LUT"""
         if cfg.functions.reciprocal_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.reciprocal_lut_max_bits, 
                               cfg.functions.reciprocal_haar_size_bits, 
                               np.reciprocal,
-                              "reciprocalHaar")
+                              "reciprocal_haar")
             cls.generate_bior(cfg.functions.reciprocal_lut_max_bits, 
                               cfg.functions.reciprocal_bior_size_bits,
                               np.reciprocal,
-                              "reciprocalBior")
+                              "reciprocal_bior")
 
         """Sqrt LUT"""
         if cfg.functions.sqrt_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.sqrt_lut_max_bits, 
                               cfg.functions.sqrt_haar_size_bits, 
                               np.sqrt,
-                              "sqrtHaar")
+                              "sqrt_haar")
             cls.generate_bior(cfg.functions.sqrt_lut_max_bits, 
                               cfg.functions.sqrt_bior_size_bits,
                               np.sqrt,
-                              "sqrtBior")
+                              "sqrt_bior")
 
         """Inv Sqrt LUT"""
         if cfg.functions.inv_sqrt_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.inv_sqrt_lut_max_bits, 
                               cfg.functions.inv_sqrt_haar_size_bits, 
                               lambda x: np.reciprocal(np.sqrt(x)),
-                              "inv_sqrtHaar")
+                              "inv_sqrt_haar")
             cls.generate_bior(cfg.functions.inv_sqrt_lut_max_bits, 
                               cfg.functions.inv_sqrt_bior_size_bits,
-                              np.sqrt,
-                              "inv_sqrtBior")
+                              lambda x: np.reciprocal(np.sqrt(x)),
+                              "inv_sqrt_bior")
                               
         """Trigonometry LUTs: Sin, Cos"""
         if cfg.functions.trigonometry_method in ("haar", "bior"):
             cls.generate_haar(3, 
                               cfg.functions.trigonometry_haar_size_bits,
                               np.sin,
-                              "sinHaar")
+                              "sin_haar")
             cls.generate_bior(3,
                               cfg.functions.trigonometry_bior_size_bits,
                               np.sin,
-                              "sinBior")
+                              "sin_bior")
             cls.generate_haar(3,
                               cfg.functions.trigonometry_haar_size_bits,
                               np.cos,
-                              "cosHaar")
+                              "cos_haar")
             cls.generate_bior(3,
                               cfg.functions.trigonometry_bior_size_bits,
                               np.cos,
-                              "cosBior")
+                              "cos_bior")
 
         """Sigmoid & Tanh LUT"""
         if cfg.functions.sigmoid_tanh_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.sigmoid_lut_max_bits,
                               cfg.functions.sigmoid_tanh_haar_size_bits,
                               lambda x: 1/(1 + np.exp(-x)),
-                              "sigmoidHaar")
+                              "sigmoid_haar")
             cls.generate_bior(cfg.functions.sigmoid_lut_max_bits, 
                               cfg.functions.sigmoid_tanh_bior_size_bits,
                               lambda x: 1/(1 + np.exp(-x)),
-                              "sigmoidBior")
+                              "sigmoid_bior")
             cls.generate_haar(cfg.functions.tanh_lut_max_bits,
                               cfg.functions.sigmoid_tanh_haar_size_bits,
                               np.tanh,
-                              "tanhHaar")
+                              "tanh_haar")
             cls.generate_bior(cfg.functions.tanh_lut_max_bits, 
                               cfg.functions.sigmoid_tanh_bior_size_bits,
                               np.tanh,
-                              "tanhBior")
+                              "tanh_bior")
 
         """Erf LUT"""
         if cfg.functions.erf_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.erf_lut_max_bits, 
                               cfg.functions.erf_haar_size_bits, 
                               lambda x: np.array([math.erf(x_) for x_ in x]),
-                              "erfHaar")
+                              "erf_haar")
             cls.generate_bior(cfg.functions.erf_lut_max_bits, 
                               cfg.functions.erf_bior_size_bits,
                               lambda x: np.array([math.erf(x_) for x_ in x]),
-                              "erfBior")
+                              "erf_bior")
 
 
 def _nexp_lut(self, method):
@@ -239,13 +239,13 @@ def _nexp_lut(self, method):
         check = self < 2**cfg.functions.exp_lut_max_bits
         truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_bior_size_bits
         msb = self.div(2**truncation)
-        lut = msb.evaluate_lut(luts.LUTs["nexpHaar"])
+        lut = msb.evaluate_lut(luts.LUTs["nexp_haar"])
         return check * lut
     elif method == "bior":
         check = self < 2**cfg.functions.exp_lut_max_bits
         truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_bior_size_bits
         msb, lsb = self.divmod(2**truncation)
-        lut = msb.evaluate_bior_lut(luts.LUTs["nexpBior"], lsb, truncation)
+        lut = msb.evaluate_bior_lut(luts.LUTs["nexp_bior"], lsb, truncation)
         return check * lut
     else:
         raise ValueError(f"Invalid method {method} given for nexp function")
@@ -273,11 +273,11 @@ def exp(self):
         if method == "haar":
             truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_haar_size_bits 
             msb = self.div(2**truncation)
-            return msb.evaluate_lut(luts.LUTs["expHaar"])
+            return msb.evaluate_lut(luts.LUTs["exp_haar"])
         elif method == "bior":
             truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_bior_size_bits
             msb, lsb = self.divmod(2**truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["expBior"], lsb, truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["exp_bior"], lsb, truncation)
     elif method == "limit":
         iters = cfg.functions.exp_iterations
         result = 1 + self.div(2**iters)
@@ -333,12 +333,12 @@ def log(self, input_in_01=False, use_lut=False):
         luts = LookupTables()
         if method == "haar":
             log_truncation = cfg.functions.log_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.log_haar_size_bits
-            msb = self.div(2**log_truncation) # get rid of LSBs
-            return msb.evaluate_lut(luts.LUTs["logHaar"])
+            msb = self.div(2**log_truncation)
+            return msb.evaluate_lut(luts.LUTs["log_haar"])
         elif method == "bior":
             log_truncation = cfg.functions.log_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.log_bior_size_bits
             msb, lsb = self.divmod(2**log_truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["logBior"], lsb, log_truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["log_bior"], lsb, log_truncation)
     elif method == "iter":
         term1 = self.div(120)
         term2 = exp(self.mul(2).add(1.0).neg()).mul(20)
@@ -406,12 +406,12 @@ def reciprocal(self, input_in_01=False):
         luts = LookupTables()
         if method == "haar":
             reciprocal_truncation = cfg.functions.reciprocal_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.reciprocal_haar_size_bits
-            msb = self.div(2**reciprocal_truncation) # get rid of LSBs
-            return msb.evaluate_lut(luts.LUTs["reciprocalHaar"])
+            msb = self.div(2**reciprocal_truncation)
+            return msb.evaluate_lut(luts.LUTs["reciprocal_haar"])
         elif method == "bior":
             reciprocal_truncation = cfg.functions.reciprocal_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.reciprocal_bior_size_bits
             msb, lsb = self.divmod(2**reciprocal_truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["reciprocalBior"], lsb, reciprocal_truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["reciprocal_bior"], lsb, reciprocal_truncation)
     elif method == "NR":
         nr_iters = cfg.functions.reciprocal_nr_iters
         if initial is None:
@@ -455,12 +455,12 @@ def inv_sqrt(self):
         luts = LookupTables()
         if method == "haar":
             truncation = cfg.functions.inv_sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_haar_size_bits
-            msb = self.div(2**truncation) # get rid of LSBs
-            return msb.evaluate_lut(luts.LUTs["inv_sqrtHaar"])
+            msb = self.div(2**truncation)
+            return msb.evaluate_lut(luts.LUTs["inv_sqrt_haar"])
         elif method == "bior":
             truncation = cfg.functions.inv_sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_bior_size_bits
             msb, lsb = self.divmod(2**truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["inv_sqrtBior"], lsb, truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["inv_sqrt_bior"], lsb, truncation)
     elif method == "NR":
         # Initialize using decent approximation
         if initial is None:
@@ -497,11 +497,11 @@ def sqrt(self):
         if method == "haar":
             truncation = cfg.functions.sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sqrt_haar_size_bits
             msb = self.div(2**truncation)
-            return msb.evaluate_lut(luts.LUTs["sqrtHaar"])
+            return msb.evaluate_lut(luts.LUTs["sqrt_haar"])
         elif method == "bior":
             truncation = cfg.functions.sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sqrt_bior_size_bits
             msb, lsb = self.divmod(2**truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["sqrtBior"], lsb, truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["sqrt_bior"], lsb, truncation)
     elif method == "NR":
         return inv_sqrt(self).mul_(self)
     else:
@@ -563,11 +563,11 @@ def cos(self):
         if method == "haar":
             trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
             msb = mod.div(2**trig_truncation)
-            return msb.evaluate_lut(luts.LUTs["cosHaar"])
+            return msb.evaluate_lut(luts.LUTs["cos_haar"])
         elif method == "bior":
             trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_bior_size_bits
             msb, lsb = mod.divmod(2**trig_truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["cosBior"], lsb, trig_truncation)
+            return msb.evaluate_bior_lut(luts.LUTs["cos_bior"], lsb, trig_truncation)
     elif method == "NR":
         return cossin(self)[0]
     else:
@@ -590,11 +590,11 @@ def sin(self):
         if method == "haar":
             trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
             msb = mod.div(2**trig_truncation)
-            lut = msb.evaluate_lut(luts.LUTs["sinHaar"])
+            lut = msb.evaluate_lut(luts.LUTs["sin_haar"])
         elif method == "bior":
             trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_bior_size_bits
             msb, lsb = mod.divmod(2**trig_truncation)
-            lut = msb.evaluate_bior_lut(luts.LUTs["sinBior"], lsb, trig_truncation)
+            lut = msb.evaluate_bior_lut(luts.LUTs["sin_bior"], lsb, trig_truncation)
         return lut * sgn
     elif method == "NR":
         return cossin(self)[1]
@@ -627,17 +627,17 @@ def sigmoid(self):
     if method in ("haar", "bior"):
         luts = LookupTables()
         ltz = self._ltz()
-        sign = 1 - 2 * ltz
-        abs = sign * self
+        sgn = 1 - 2 * ltz
+        abs = sgn * self
         if method == "haar":
             st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
             msb = abs.div(2**st_truncation)
-            lut = msb.evaluate_lut(luts.LUTs["sigmoidHaar"])
+            lut = msb.evaluate_lut(luts.LUTs["sigmoid_haar"])
         elif method == "bior":
             st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_bior_size_bits
             msb, lsb = abs.divmod(2**st_truncation)
-            lut = msb.evaluate_bior_lut(luts.LUTs["sigmoidBior"], lsb, st_truncation)
-        eval = ltz + sign * lut
+            lut = msb.evaluate_bior_lut(luts.LUTs["sigmoid_bior"], lsb, st_truncation)
+        eval = ltz + sgn * lut
         limit = 1 - ltz
         check = abs < 2**cfg.functions.sigmoid_lut_max_bits
         return limit + check * (eval - limit)
@@ -646,9 +646,9 @@ def sigmoid(self):
         return tanh_approx.div(2) + 0.5
     elif method == "reciprocal":
         ltz = self._ltz()
-        sign = 1 - 2 * ltz
+        sgn = 1 - 2 * ltz
 
-        pos_input = self.mul(sign)
+        pos_input = self.mul(sgn)
         denominator = pos_input.neg().exp().add(1)
 
         # TODO: Set these with configurable parameters
@@ -694,18 +694,18 @@ def tanh(self):
         
     if method in ("haar", "bior"):
         luts = LookupTables()
-        sign = self.sign()
-        abs = sign * self
+        sgn = self.sign()
+        abs = sgn * self
         if method == "haar":
             st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
             msb = abs.div(2**st_truncation)
-            lut = msb.evaluate_lut(luts.LUTs["tanhHaar"])
+            lut = msb.evaluate_lut(luts.LUTs["tanh_haar"])
         elif method == "bior":
             st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_bior_size_bits
             msb, lsb = abs.divmod(2**st_truncation)
-            lut = msb.evaluate_bior_lut(luts.LUTs["tanhBior"], lsb, st_truncation)
+            lut = msb.evaluate_bior_lut(luts.LUTs["tanh_bior"], lsb, st_truncation)
         check = abs < 2**cfg.functions.tanh_lut_max_bits
-        return sign * (1-check + lut * check)
+        return sgn * (1-check + lut * check)
     elif method == "reciprocal":
         return self.mul(2).sigmoid().mul(2).sub(1)
     elif method == "chebyshev":
@@ -761,18 +761,18 @@ def erf(self):
 
     if method in ("haar", "bior"):
         luts = LookupTables()
-        sign = self.sign()
-        abs = sign * self
+        sgn = self.sign()
+        abs = sgn * self
         if method == "haar":
             erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_haar_size_bits
             msb = abs.div(2**erf_truncation)
-            lut = msb.evaluate_lut(luts.LUTs["erfHaar"])
+            lut = msb.evaluate_lut(luts.LUTs["erf_haar"])
         elif method == "bior":
             erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_bior_size_bits
             msb, lsb = abs.divmod(2**erf_truncation)
-            lut = msb.evaluate_bior_lut(luts.LUTs["erfBior"], lsb, erf_truncation)
+            lut = msb.evaluate_bior_lut(luts.LUTs["erf_bior"], lsb, erf_truncation)
         check = abs < 2**cfg.functions.erf_lut_max_bits
-        return sign * (1-check + lut * check)
+        return sgn * (1-check + lut * check)
     elif method == "Taylor":
         iters = cfg.functions.erf_iterations
 

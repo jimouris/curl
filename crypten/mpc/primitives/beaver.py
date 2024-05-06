@@ -179,14 +179,16 @@ def evaluate_lut(x, lut):
     """
     provider = crypten.mpc.get_default_provider()
     size = lut.size()[0]
+    shape = x.size()
+    x = x.flatten()
 
     # Generate one-hot vectors for each element of x
     r, one_hot_r = provider.generate_one_hot(x.size(), size)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r).mod(size)
-        shift_amount = z.reveal()
+        z = (x - r) % size
+        shift_amount = z.reveal() % size
     
     if shift_amount.size():
         # for i in range(shift_amount.size()[0]):
@@ -199,47 +201,53 @@ def evaluate_lut(x, lut):
         one_hot_r = one_hot_r.roll(int(shift_amount))
         lookup = one_hot_r * lut
         result = lookup.sum()
+    result = result.reshape(shape)
     return result
 
-def evaluate_bior_lut(x, lut, scale, bias):
+def evaluate_bior_lut(x, luts, scale, bias):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
 
     Args:
         x (torch.Tensor): Input tensor.
-        lut (torch.Tensor): Look-Up Table tensor.
+        luts (torch.Tensor): Look-Up Table tensors.
+        scale (torch.Tensor): Scaling factor for the lookups.
+        bias (int): 
 
     Returns:
         torch.Tensor: Result tensor after applying the LUT.
     """
     provider = crypten.mpc.get_default_provider()
-    size = lut[0].size()[0]
+    size = luts[0].size()[0]
+    shape = x.size()
+    x = x.flatten()
 
     # Generate one-hot vectors for each element of x
     r, one_hot_r = provider.generate_one_hot(x.size(), size)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r).mod(size)
-        shift_amount = z.reveal()
+        z = (x - r) % size
+        shift_amount = z.reveal() % size
     
     if shift_amount.size():
         indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
-        lookup0 = one_hot_r * lut[0]
+        lookup0 = one_hot_r * luts[0]
         lut0 = lookup0.sum(dim=1)
-        lookup1 = one_hot_r * lut[1]
+        lookup1 = one_hot_r * luts[1]
         lut1 = lookup1.sum(dim=1)
     else:
         one_hot_r = one_hot_r.roll(int(shift_amount))
-        lookup0 = one_hot_r * lut[0]
+        lookup0 = one_hot_r * luts[0]
         lut0 = lookup0.sum()
-        lookup1 = one_hot_r * lut[1]
+        lookup1 = one_hot_r * luts[1]
         lut1 = lookup1.sum()
     bits = scale.encoder._precision_bits
-    scale.encoder._precision_bits = 0
-    lut = (lut1 - lut0) * scale + 2**bias * lut0
+    scaling = scale.flatten()
+    scaling.encoder._precision_bits = 0
+    lut = (lut1 - lut0) * scaling + 2**bias * lut0
     result = lut.div(int(2**(1.5*bias)))
-    scale.encoder._precision_bits = bits
+    result = result.reshape(shape)
     return result
 
 def AND(x, y):
