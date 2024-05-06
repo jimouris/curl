@@ -100,11 +100,12 @@ class FuncBenchmarks:
         "sum",
         "mean",
         "neg",
+        "erf"
     ]
 
     LAYERS = ["conv2d"]
 
-    DOMAIN = torch.arange(start=0.01, end=100, step=0.01)
+    DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
     # for exponential, sin, and cos
     TRUNCATED_DOMAIN = torch.arange(start=0.001, end=10, step=0.001)
 
@@ -137,8 +138,8 @@ class FuncBenchmarks:
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
         x, y = (
-            torch.rand(self.tensor_size, device=self.device),
-            torch.rand(self.tensor_size, device=self.device),
+            torch.rand(self.tensor_size, device=self.device)*5 + 1,
+            torch.rand(self.tensor_size, device=self.device)*5 + 1,
         )
         x_enc, y_enc = crypten.cryptensor(x), crypten.cryptensor(y)
 
