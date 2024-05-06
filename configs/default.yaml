@@ -33,11 +33,11 @@ functions:
   reciprocal_method: "bior"
   reciprocal_nr_iters: 10
   reciprocal_log_iters: 1
-  reciprocal_all_pos: False
+  reciprocal_all_pos: True
   reciprocal_initial: null
   reciprocal_haar_size_bits: 12
-  reciprocal_bior_size_bits: 6
-  reciprocal_lut_max_bits: 4
+  reciprocal_bior_size_bits: 8
+  reciprocal_lut_max_bits: 6
 
   # sqrt configuration
   # sqrt_method: "NR"
@@ -76,8 +76,20 @@ functions:
   erf_method: "bior"
   erf_iterations: 8
   erf_haar_size_bits: 10
-  erf_bior_size_bits: 6
+  erf_bior_size_bits: 5
   erf_lut_max_bits: 4 # 2^3
+
+  # gelu configuration:
+  gelu_method: "bior"
+  gelu_haar_size_bits: 7
+  gelu_bior_size_bits: 4
+  gelu_lut_max_bits: 2
+
+  # silu configuration:
+  silu_method: "bior"
+  silu_haar_size_bits: 7
+  silu_bior_size_bits: 4
+  silu_lut_max_bits: 4
 mpc:
   active_security: False
   provider: "TFP"

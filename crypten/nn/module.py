@@ -1147,6 +1147,19 @@ class Erf(Module):
         return Erf()
 
 
+class Gelu(Module):
+    """
+    Module that calculates the gelu of the given input tensor, element-wise.
+    """
+
+    def forward(self, input):
+        return input.gelu()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Gelu()
+
+
 class _Reduce(Module):
     """
     Base class for the functionality of ONNX ReduceMean (defined here as Mean),
@@ -2414,7 +2427,6 @@ class ReLU6(Hardtanh):
             )
         super(ReLU6, self).__init__(min_val=0, max_val=6, inplace=False)
 
-
 class Sigmoid(Module):
     r"""Applies the element-wise function:
 
@@ -2428,6 +2440,21 @@ class Sigmoid(Module):
     @staticmethod
     def from_onnx(attributes=None):
         return Sigmoid()
+
+
+class Silu(Module):
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{Silu}(x) = \silu(x) = \frac{x}{1 + \exp(-x)}
+    """
+
+    def forward(self, x):
+        return x.silu()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Silu()
 
 
 class Softmax(Module):

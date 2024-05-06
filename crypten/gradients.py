@@ -628,6 +628,21 @@ class AutogradErf(AutogradFunction):
         return grad_output.mul(grad)
 
 
+@register_function("gelu")
+class AutogradGelu(AutogradFunction):
+    @staticmethod
+    def forward(ctx, input):
+        ctx.save_for_backward(input)
+        return input.gelu()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (input,) = ctx.saved_tensors
+        input_square = - input.square() / 2
+        grad = (1 + (input / math.sqrt(2)).erf()) / 2 + input * input_square.exp() / math.sqrt(2 * math.pi)
+        return grad_output.mul(grad)
+
+
 @register_function("relu6")
 class AutogradReLU6(AutogradFunction):
     r"""Applies the element-wise function:
@@ -1392,6 +1407,21 @@ class AutogradSigmoid(AutogradFunction):
     def backward(ctx, grad_output):
         (probs,) = ctx.saved_tensors
         return grad_output.mul(probs).mul_(probs.neg().add_(1.0))
+
+
+@register_function("silu")
+class AutogradSilu(AutogradFunction):
+    @staticmethod
+    def forward(ctx, input):
+        silu = input.silu()
+        ctx.save_multiple_for_backward([input, silu])
+        return silu
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (input, silu) = ctx.saved_tensors
+        sigmoid = input.sigmoid()
+        return grad_output.mul(sigmoid + silu * (1 - sigmoid))
 
 
 @register_function("softmax")

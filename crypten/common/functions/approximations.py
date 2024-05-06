@@ -27,6 +27,8 @@ __all__ = [
     "sigmoid",
     "tanh",
     "erf",
+    "gelu",
+    "silu",
     "softmax",
     "log_softmax",
 ]
@@ -91,6 +93,9 @@ class LookupTables:
             * tanh: hyperbolic tangent function
             * erf: Error function
         """
+        sigmoid = lambda x: 1 / (1 + np.exp(-x))
+        relu = lambda x: x * (x > 0)
+
         """Exp LUT"""
         if cfg.functions.exp_method in ("haar", "bior"):
             scale = 2**cfg.encoder.precision_bits
@@ -190,11 +195,11 @@ class LookupTables:
         if cfg.functions.sigmoid_tanh_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.sigmoid_lut_max_bits,
                               cfg.functions.sigmoid_tanh_haar_size_bits,
-                              lambda x: 1/(1 + np.exp(-x)),
+                              sigmoid,
                               "sigmoid_haar")
             cls.generate_bior(cfg.functions.sigmoid_lut_max_bits, 
                               cfg.functions.sigmoid_tanh_bior_size_bits,
-                              lambda x: 1/(1 + np.exp(-x)),
+                              sigmoid,
                               "sigmoid_bior")
             cls.generate_haar(cfg.functions.tanh_lut_max_bits,
                               cfg.functions.sigmoid_tanh_haar_size_bits,
@@ -216,6 +221,29 @@ class LookupTables:
                               lambda x: np.array([math.erf(x_) for x_ in x]),
                               "erf_bior")
 
+        """Gelu LUT"""
+        if cfg.functions.gelu_method in ("haar", "bior"):
+            gelu = lambda x: x * (1 + np.array([math.erf(x_/math.sqrt(2)) for x_ in x])) / 2
+            cls.generate_haar(cfg.functions.gelu_lut_max_bits, 
+                              cfg.functions.gelu_haar_size_bits, 
+                              lambda x: relu(x) - gelu(x),
+                              "gelu_haar")
+            cls.generate_bior(cfg.functions.gelu_lut_max_bits, 
+                              cfg.functions.gelu_bior_size_bits,
+                              lambda x: relu(x) - gelu(x),
+                              "gelu_bior")
+
+        """Silu LUT"""
+        if cfg.functions.silu_method in ("haar", "bior"):
+            silu = lambda x: x * sigmoid(x)
+            cls.generate_haar(cfg.functions.silu_lut_max_bits, 
+                              cfg.functions.silu_haar_size_bits, 
+                              lambda x: relu(x) - silu(x),
+                              "silu_haar")
+            cls.generate_bior(cfg.functions.silu_lut_max_bits, 
+                              cfg.functions.silu_bior_size_bits,
+                              lambda x: relu(x) - silu(x),
+                              "silu_bior")
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""
@@ -784,6 +812,62 @@ def erf(self):
         # NOTE: This approximation is not unstable for large tensor values.
     else:
         raise ValueError(f"Unrecognized method {method} for erf")
+
+def gelu(self):
+    r"""
+    Approximates the gelu function of the input tensor.
+    """
+    method = cfg.functions.gelu_method
+
+    if method in ("haar", "bior"):
+        luts = LookupTables()
+        sgn = self.sign()
+        abs = sgn * self
+        drelu = 1 - self._ltz()
+        relu = self * drelu
+        if method == "haar":
+            truncation = cfg.functions.gelu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.gelu_haar_size_bits
+            msb = abs.div(2**truncation)
+            lut = msb.evaluate_lut(luts.LUTs["gelu_haar"])
+        elif method == "bior":
+            truncation = cfg.functions.gelu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.gelu_bior_size_bits
+            msb, lsb = abs.divmod(2**truncation)
+            lut = msb.evaluate_bior_lut(luts.LUTs["gelu_bior"], lsb, truncation)
+        check = abs < 2**cfg.functions.gelu_lut_max_bits
+        return relu - (1-check + lut * check)
+    elif method == "erf":
+        gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
+        return gelu
+    else:
+        raise ValueError(f"Unrecognized method {method} for gelu")
+
+def silu(self):
+    r"""
+    Approximates the silu function of the input tensor.
+    """
+    method = cfg.functions.silu_method
+
+    if method in ("haar", "bior"):
+        luts = LookupTables()
+        sgn = self.sign()
+        abs = sgn * self
+        drelu = 1 - self._ltz()
+        relu = self * drelu
+        if method == "haar":
+            truncation = cfg.functions.silu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.silu_haar_size_bits
+            msb = abs.div(2**truncation)
+            lut = msb.evaluate_lut(luts.LUTs["silu_haar"])
+        elif method == "bior":
+            truncation = cfg.functions.silu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.silu_bior_size_bits
+            msb, lsb = abs.divmod(2**truncation)
+            lut = msb.evaluate_bior_lut(luts.LUTs["silu_bior"], lsb, truncation)
+        check = abs < 2**cfg.functions.silu_lut_max_bits
+        return relu - (1-check + lut * check)
+    elif method == "sigmoid":
+        silu = self * self.sigmoid()
+        return silu
+    else:
+        raise ValueError(f"Unrecognized method {method} for gelu")
 
 def softmax(self, dim, **kwargs):
     r"""Compute the softmax of a tensor's elements along a given dimension"""
