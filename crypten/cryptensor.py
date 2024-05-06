@@ -122,6 +122,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         "conv2d",
         "copy_",
         "div_",
+        "divmod",
         "mod",
         "matmul",
         "neg",

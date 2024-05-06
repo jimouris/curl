@@ -89,7 +89,6 @@ class TrustedFirstParty(TupleProvider):
         We need a vector for each tensor of size lut_size
 
         """
-        lut_size = lut_size[0]
         r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
         one_hot = []
         for i in range(lut_size):

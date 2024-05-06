@@ -10,66 +10,74 @@ functions:
 
   # exponential function
   # exp_method: "limit"
-  exp_method: "lut"
+  exp_method: "bior"
   exp_iterations: 8
-  exp_lut_truncation_bits: 6
-  exp_lut_max_element: 16 # 2^4
+  exp_haar_size_bits: 10
+  exp_bior_size_bits: 5
+  exp_lut_max_bits: 3
   exp_all_neg: True
   exp_neg_lut_size: 256 # 2^8
 
   # log configuration
   # log_method: "iter"
-  log_method: "lut"
+  log_method: "bior"
   log_iterations: 2
   log_exp_iterations: 8
   log_order: 8
-  log_lut_truncation_bits: 6
-  log_lut_max_element: 16 # 2^4
+  log_haar_size_bits: 10
+  log_bior_size_bits: 8
+  log_lut_max_bits: 4
 
   # reciprocal configuration
   # reciprocal_method: "NR"
-  reciprocal_method: "lut"
+  reciprocal_method: "bior"
   reciprocal_nr_iters: 10
   reciprocal_log_iters: 1
   reciprocal_all_pos: False
   reciprocal_initial: null
-  reciprocal_lut_truncation_bits: 6
-  reciprocal_lut_max_element: 16 # 2^4
+  reciprocal_haar_size_bits: 12
+  reciprocal_bior_size_bits: 6
+  reciprocal_lut_max_bits: 4
 
   # sqrt configuration
   # sqrt_method: "NR"
-  sqrt_method: "lut"
+  sqrt_method: "bior"
   sqrt_nr_iters: 3
   sqrt_nr_initial: null
-  sqrt_lut_truncation_bits: 10
-  sqrt_lut_max_element: 16 # 2^4
+  sqrt_haar_size_bits: 10
+  sqrt_bior_size_bits: 6
+  sqrt_lut_max_bits: 4
 
   # inv_sqrt configuration
   # inv_sqrt_method: "NR"
-  inv_sqrt_method: "lut"
-  inv_sqrt_lut_truncation_bits: 10
-  inv_sqrt_lut_max_element: 16 # 2^4
+  inv_sqrt_method: "bior"
+  inv_sqrt_haar_size_bits: 10
+  inv_sqrt_bior_size_bits: 10
+  inv_sqrt_lut_max_bits: 4
 
   # sigmoid / tanh configuration
   # sigmoid_tanh_method: "reciprocal"
-  sigmoid_tanh_method: "lut"
+  sigmoid_tanh_method: "bior"
   sigmoid_tanh_terms: 32
-  sigmoid_tanh_lut_size_bits: 10
-  sigmoid_lut_max_bits: 3
-  tanh_lut_max_bits: 2
+  sigmoid_tanh_haar_size_bits: 10
+  sigmoid_tanh_bior_size_bits: 6
+  sigmoid_lut_max_bits: 4
+  tanh_lut_max_bits: 4
 
   # trigonometry configuration
   # trigonometry_method: "NR"
-  trigonometry_method: "lut"
-  trigonometry_lut_size_bits: 8
+  trigonometry_method: "bior"
+  trigonometry_haar_size_bits: 8
+  trigonometry_bior_size_bits: 5
   trig_iterations: 10
 
   # error function configuration:
   # erf_method: "Taylor"
-  erf_method: "lut"
+  erf_method: "bior"
   erf_iterations: 8
-  erf_lut_size_bits: 10
-  erf_lut_max_bits: 3 # 2^3
+  erf_haar_size_bits: 10
+  erf_bior_size_bits: 6
+  erf_lut_max_bits: 4 # 2^3
 mpc:
   active_security: False
   provider: "TFP"

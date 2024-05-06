@@ -310,6 +310,12 @@ class MPCTensor(CrypTensor):
         result._tensor.evaluate_lut(lut)
         return result
 
+    def evaluate_bior_lut(self, lut, scale, bias):
+        r"""Evaluate a look-up table (LUT) on the input tensor."""
+        result = self.clone()
+        result._tensor.evaluate_bior_lut(lut, scale, bias)
+        return result
+
 UNARY_FUNCTIONS = [
     "avg_pool2d",
     "square",
@@ -317,6 +323,7 @@ UNARY_FUNCTIONS = [
 ]
 
 BINARY_FUNCTIONS = [
+    "divmod",
     "mod",
     "add",
     "sub",

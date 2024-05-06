@@ -481,6 +481,15 @@ class ArithmeticSharedTensor:
         assert is_float_tensor(y), "Unsupported type for div_: %s" % type(y)
         return self.mul_(y.reciprocal())
 
+    def divmod(self, y):
+        """
+        Modulo of two tensors element-wise:
+        self % y = self - y * (self // y)
+        """
+        divisor = self.div(y)
+        remainder = self - divisor * y
+        return divisor, remainder
+
     def mod(self, y):
         """
         Modulo of two tensors element-wise:
@@ -612,9 +621,15 @@ class ArithmeticSharedTensor:
         return self.clone().square_()
 
     def evaluate_lut(self, lut):
-        """....TODO"""
+        """Evaluate a look-up table (LUT) on the input tensor."""
         protocol = globals()[cfg.mpc.protocol]
         self.share = protocol.evaluate_lut(self, lut).share
+        return self
+
+    def evaluate_bior_lut(self, luts, scale, bias):
+        """Evaluate a bior look-up table (LUT) on the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        self.share = protocol.evaluate_bior_lut(self, luts, scale._tensor, bias).share
         return self
 
     def where(self, condition, y):
