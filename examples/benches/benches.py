@@ -9,10 +9,7 @@ import torch
 import functools
 
 import crypten
-import crypten.communicator as comm
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
@@ -94,10 +91,10 @@ class FuncBenchmarks:
     @time_me
     def time_func(x, func, y=None):
         """Invokes func as a method of x"""
-        if func is "gelu":
+        if func == "gelu":
             gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
             return gelu(x)
-        elif func is "silu":
+        elif func == "silu":
             silu = lambda x: x * x.sigmoid()
             return silu(x)
         if y is None:

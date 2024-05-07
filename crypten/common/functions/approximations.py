@@ -78,7 +78,7 @@ class LookupTables:
         # coeffs = coeffs[:2**lut_bits]
         coeffs = np.stack([np.roll(coeffs, -2)[:2**lut_bits], np.roll(coeffs, -3)[:2**lut_bits]])
         cls.LUTs[name] = torch.tensor(coeffs * scale).long()
-    
+
     @classmethod
     def initialize_luts(cls):
         r"""Initialize LUTs for different approximation functions:
@@ -89,9 +89,11 @@ class LookupTables:
             * inv_sqrt: Inverse square root
             * sin: Sine
             * cos: Cosine
-            * sigmoid: Sigmoid 
+            * sigmoid: Sigmoid
             * tanh: hyperbolic tangent function
             * erf: Error function
+            * gelu: Gaussian Error Linear Units
+            * silu: Sigmoid Linear Units
         """
         sigmoid = lambda x: 1 / (1 + np.exp(-x))
         relu = lambda x: x * (x > 0)
@@ -118,12 +120,12 @@ class LookupTables:
             full = np.exp(-np.linspace(1.0*2**4/size, 2**4, size))
             cls.LUTs['nexp_high'] = torch.tensor(full * scale).long()
             # NEXP-BIOR
-            cls.generate_haar(cfg.functions.exp_lut_max_bits, 
+            cls.generate_haar(cfg.functions.exp_lut_max_bits,
                               cfg.functions.exp_haar_size_bits,
                               lambda x: np.exp(-x),
                               "nexp_haar")
             # NEXP-BIOR
-            cls.generate_bior(cfg.functions.exp_lut_max_bits, 
+            cls.generate_bior(cfg.functions.exp_lut_max_bits,
                               cfg.functions.exp_bior_size_bits,
                               lambda x: np.exp(-x),
                               "nexp_bior")
@@ -131,50 +133,50 @@ class LookupTables:
         """Logarithm LUT"""
         if cfg.functions.log_method in ("haar", "bior"):
             cls.generate_haar(cfg.functions.log_lut_max_bits,
-                              cfg.functions.log_haar_size_bits, 
+                              cfg.functions.log_haar_size_bits,
                               np.log,
                               "log_haar")
-            cls.generate_bior(cfg.functions.log_lut_max_bits, 
+            cls.generate_bior(cfg.functions.log_lut_max_bits,
                               cfg.functions.log_bior_size_bits,
                               np.log,
                               "log_bior")
 
         """Reciprocal LUT"""
         if cfg.functions.reciprocal_method in ("haar", "bior"):
-            cls.generate_haar(cfg.functions.reciprocal_lut_max_bits, 
-                              cfg.functions.reciprocal_haar_size_bits, 
+            cls.generate_haar(cfg.functions.reciprocal_lut_max_bits,
+                              cfg.functions.reciprocal_haar_size_bits,
                               np.reciprocal,
                               "reciprocal_haar")
-            cls.generate_bior(cfg.functions.reciprocal_lut_max_bits, 
+            cls.generate_bior(cfg.functions.reciprocal_lut_max_bits,
                               cfg.functions.reciprocal_bior_size_bits,
                               np.reciprocal,
                               "reciprocal_bior")
 
         """Sqrt LUT"""
         if cfg.functions.sqrt_method in ("haar", "bior"):
-            cls.generate_haar(cfg.functions.sqrt_lut_max_bits, 
-                              cfg.functions.sqrt_haar_size_bits, 
+            cls.generate_haar(cfg.functions.sqrt_lut_max_bits,
+                              cfg.functions.sqrt_haar_size_bits,
                               np.sqrt,
                               "sqrt_haar")
-            cls.generate_bior(cfg.functions.sqrt_lut_max_bits, 
+            cls.generate_bior(cfg.functions.sqrt_lut_max_bits,
                               cfg.functions.sqrt_bior_size_bits,
                               np.sqrt,
                               "sqrt_bior")
 
         """Inv Sqrt LUT"""
         if cfg.functions.inv_sqrt_method in ("haar", "bior"):
-            cls.generate_haar(cfg.functions.inv_sqrt_lut_max_bits, 
-                              cfg.functions.inv_sqrt_haar_size_bits, 
+            cls.generate_haar(cfg.functions.inv_sqrt_lut_max_bits,
+                              cfg.functions.inv_sqrt_haar_size_bits,
                               lambda x: np.reciprocal(np.sqrt(x)),
                               "inv_sqrt_haar")
-            cls.generate_bior(cfg.functions.inv_sqrt_lut_max_bits, 
+            cls.generate_bior(cfg.functions.inv_sqrt_lut_max_bits,
                               cfg.functions.inv_sqrt_bior_size_bits,
                               lambda x: np.reciprocal(np.sqrt(x)),
                               "inv_sqrt_bior")
-                              
+
         """Trigonometry LUTs: Sin, Cos"""
         if cfg.functions.trigonometry_method in ("haar", "bior"):
-            cls.generate_haar(3, 
+            cls.generate_haar(3,
                               cfg.functions.trigonometry_haar_size_bits,
                               np.sin,
                               "sin_haar")
@@ -197,7 +199,7 @@ class LookupTables:
                               cfg.functions.sigmoid_tanh_haar_size_bits,
                               sigmoid,
                               "sigmoid_haar")
-            cls.generate_bior(cfg.functions.sigmoid_lut_max_bits, 
+            cls.generate_bior(cfg.functions.sigmoid_lut_max_bits,
                               cfg.functions.sigmoid_tanh_bior_size_bits,
                               sigmoid,
                               "sigmoid_bior")
@@ -205,18 +207,18 @@ class LookupTables:
                               cfg.functions.sigmoid_tanh_haar_size_bits,
                               np.tanh,
                               "tanh_haar")
-            cls.generate_bior(cfg.functions.tanh_lut_max_bits, 
+            cls.generate_bior(cfg.functions.tanh_lut_max_bits,
                               cfg.functions.sigmoid_tanh_bior_size_bits,
                               np.tanh,
                               "tanh_bior")
 
         """Erf LUT"""
         if cfg.functions.erf_method in ("haar", "bior"):
-            cls.generate_haar(cfg.functions.erf_lut_max_bits, 
-                              cfg.functions.erf_haar_size_bits, 
+            cls.generate_haar(cfg.functions.erf_lut_max_bits,
+                              cfg.functions.erf_haar_size_bits,
                               lambda x: np.array([math.erf(x_) for x_ in x]),
                               "erf_haar")
-            cls.generate_bior(cfg.functions.erf_lut_max_bits, 
+            cls.generate_bior(cfg.functions.erf_lut_max_bits,
                               cfg.functions.erf_bior_size_bits,
                               lambda x: np.array([math.erf(x_) for x_ in x]),
                               "erf_bior")
@@ -224,11 +226,11 @@ class LookupTables:
         """Gelu LUT"""
         if cfg.functions.gelu_method in ("haar", "bior"):
             gelu = lambda x: x * (1 + np.array([math.erf(x_/math.sqrt(2)) for x_ in x])) / 2
-            cls.generate_haar(cfg.functions.gelu_lut_max_bits, 
-                              cfg.functions.gelu_haar_size_bits, 
+            cls.generate_haar(cfg.functions.gelu_lut_max_bits,
+                              cfg.functions.gelu_haar_size_bits,
                               lambda x: relu(x) - gelu(x),
                               "gelu_haar")
-            cls.generate_bior(cfg.functions.gelu_lut_max_bits, 
+            cls.generate_bior(cfg.functions.gelu_lut_max_bits,
                               cfg.functions.gelu_bior_size_bits,
                               lambda x: relu(x) - gelu(x),
                               "gelu_bior")
@@ -236,11 +238,11 @@ class LookupTables:
         """Silu LUT"""
         if cfg.functions.silu_method in ("haar", "bior"):
             silu = lambda x: x * sigmoid(x)
-            cls.generate_haar(cfg.functions.silu_lut_max_bits, 
-                              cfg.functions.silu_haar_size_bits, 
+            cls.generate_haar(cfg.functions.silu_lut_max_bits,
+                              cfg.functions.silu_haar_size_bits,
                               lambda x: relu(x) - silu(x),
                               "silu_haar")
-            cls.generate_bior(cfg.functions.silu_lut_max_bits, 
+            cls.generate_bior(cfg.functions.silu_lut_max_bits,
                               cfg.functions.silu_bior_size_bits,
                               lambda x: relu(x) - silu(x),
                               "silu_bior")
@@ -299,7 +301,7 @@ def exp(self):
             return _nexp_lut(-self, method)
         luts = LookupTables()
         if method == "haar":
-            truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_haar_size_bits 
+            truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_haar_size_bits
             msb = self.div(2**truncation)
             return msb.evaluate_lut(luts.LUTs["exp_haar"])
         elif method == "bior":
@@ -719,7 +721,7 @@ def tanh(self):
                         Must be even and at least 6.
     """
     method = cfg.functions.sigmoid_tanh_method
-        
+
     if method in ("haar", "bior"):
         luts = LookupTables()
         sgn = self.sign()
