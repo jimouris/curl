@@ -7,13 +7,15 @@ import numpy as np
 import pandas as pd
 import torch
 import functools
+import yaml
 
 import crypten
 import torch
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-
+from crypten.config import CrypTenConfig
+from omegaconf import OmegaConf
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -212,13 +214,30 @@ class FuncBenchmarks:
 
 
 def run_benches(tensor_size):
-    crypten.init()
-
-    device=torch.device("cpu")
-
+    device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
+
+    # Run with LUTs
+    crypten.init() # default config
+    logging.info("Using LUTs Config")
+    functions_data = crypten.cfg.config.get('functions', {})
+    filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
+    logging.info("Config '{}'".format(filtered_data))
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
+    print(benches)
+    logging.info("="*60)
 
+    # Run with approximations
+    approximations_cfg = CrypTenConfig.get_default_config_path()
+    approximations_cfg = approximations_cfg.replace("default", "approximations")
+    crypten.init(approximations_cfg)
+    logging.info("Using Approximation Config")
+    functions_data = crypten.cfg.config.get('functions', {})
+    filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
+    logging.info("Config '{}'".format(filtered_data))
+
+    benches = FuncBenchmarks(tensor_size, device=device)
+    benches.run()
     print(benches)

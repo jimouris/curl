@@ -40,6 +40,10 @@ class CrypTenConfig:
     def __init__(self, config_file=None):
         self.load_config(config_file)
 
+    @classmethod
+    def get_default_config_path(cls):
+        return cls.__DEFAULT_CONFIG_PATH
+
     def load_config(self, config_file):
         """Loads config from a yaml file"""
         if config_file is None:
