@@ -69,7 +69,9 @@ class FuncBenchmarks:
         "sum",
         "mean",
         "neg",
-        "erf"
+        "erf",
+        "gelu",
+        "silu"
     ]
 
     DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
@@ -92,6 +94,12 @@ class FuncBenchmarks:
     @time_me
     def time_func(x, func, y=None):
         """Invokes func as a method of x"""
+        if func is "gelu":
+            gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
+            return gelu(x)
+        elif func is "silu":
+            silu = lambda x: x * x.sigmoid()
+            return silu(x)
         if y is None:
             return getattr(x, func)()
 
@@ -159,6 +167,12 @@ class FuncBenchmarks:
                 getattr(TRUNCATED_DOMAIN, func)(),
                 getattr(TRUNCATED_DOMAIN_enc, func)(),
             )
+        elif func in ["gelu"]:
+            gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
+            ref, out_enc = gelu(DOMAIN), getattr(DOMAIN_enc, func)()
+        elif func in ["silu"]:
+            silu = lambda x: x * x.sigmoid()
+            ref, out_enc = silu(DOMAIN), getattr(DOMAIN_enc, func)()
         elif func in FuncBenchmarks.UNARY:
             ref, out_enc = getattr(DOMAIN, func)(), getattr(DOMAIN_enc, func)()
         else:
