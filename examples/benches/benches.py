@@ -226,7 +226,7 @@ def run_benches(tensor_size):
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    print(benches)
+    logging.info("'{}'".format(benches))
     logging.info("="*60)
 
     # Run with approximations
@@ -240,4 +240,4 @@ def run_benches(tensor_size):
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    print(benches)
+    logging.info("'{}'".format(benches))

@@ -62,7 +62,6 @@ def init(config_file=None, party_name=None, device=None):
 
     # Return and raise warning if initialized
     if comm.is_initialized():
-        warnings.warn("CrypTen is already initialized.", RuntimeWarning)
         return
 
     # Initialize communicator
