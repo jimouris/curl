@@ -30,3 +30,7 @@ class HomomorphicProvider(TupleProvider):
     def B2A_rng(self, size):
         """Generate random bit tensor as arithmetic and binary shared tensors"""
         raise NotImplementedError("HomomorphicProvider not implemented")
+
+    def generate_one_hot(self, tensor_size, lut_size, device=None):
+        """Generate lookup table vectors of given sizes"""
+        raise NotImplementedError("HomomorphicProvider not implemented")

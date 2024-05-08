@@ -18,7 +18,7 @@ from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 from .provider import TupleProvider
 
 
-TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A"]
+TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_hot"]
 
 
 class TrustedThirdParty(TupleProvider):
@@ -116,6 +116,28 @@ class TrustedThirdParty(TupleProvider):
         rA = ArithmeticSharedTensor.from_shares(rA, precision=0)
         rB = BinarySharedTensor.from_shares(rB)
         return rA, rB
+
+    def generate_one_hot(self, tensor_size, lut_size, device=None):
+        """Generate lookup table vectors of given sizes"""
+        generator = TTPClient.get().get_generator(device=device)
+
+        r = generate_random_ring_element(tensor_size, generator=generator, device=device)
+        if comm.get().get_rank() == 0:
+            # Request one_hot vector from TTP
+            one_hot_r = TTPClient.get().ttp_request("generate_one_hot", device, tensor_size, lut_size)
+        else:
+            one_hot_r = generate_random_ring_element((tensor_size[0], lut_size), generator=generator, device=device)
+
+        r = ArithmeticSharedTensor.from_shares(r, precision=0)
+        one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r, precision=0)
+
+        level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.INFO)
+        logging.info(f"\tP{comm.get().get_rank()}) r: {r[0]}")
+        logging.info(f"\tP{comm.get().get_rank()}) one_hot_r: {one_hot_r[0]}")
+        logging.getLogger().setLevel(level)
+
+        return r, one_hot_r
 
     @staticmethod
     def _init():
@@ -351,15 +373,19 @@ class TTPServer:
 
         return rA
 
-    def generate_one_hot(self, tensor_size, lut_size, device=None):
+    def generate_one_hot(self, tensor_size, lut_size):
         """Generate lookup table vectors of given sizes"""
-        lut_size = lut_size[0]
-        r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
-        one_hot = []
-        for i in range(lut_size):
-            one_hot.append((r == i) * 1)
-        one_hot = torch.stack(one_hot)
-        one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
-        r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
-        return r_shares, one_hot
+        r = self._get_additive_PRSS(tensor_size)
+        r_clear = r % lut_size
 
+        level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.INFO)
+        logging.info(f"TTP - P{comm.get().get_rank()}) r: {r[0]} % {lut_size} = r_clear = {r_clear[0]}")
+        logging.getLogger().setLevel(level)
+
+        one_hot_clear = []
+        for i in range(lut_size):
+            one_hot_clear.append((r_clear == i) * 1)
+        one_hot_clear = torch.stack(one_hot_clear).t()
+
+        return one_hot_clear - self._get_additive_PRSS(one_hot_clear.size(), remove_rank=True)

@@ -7,6 +7,7 @@
 
 import crypten.communicator as comm
 import torch
+import logging
 from crypten.common.rng import generate_kbit_random_tensor, generate_random_ring_element
 from crypten.common.util import count_wraps, torch_stack
 from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
@@ -79,8 +80,8 @@ class TrustedFirstParty(TupleProvider):
 
     def generate_one_hot(self, tensor_size, lut_size, device=None):
         """Generate one hot vectors of given sizes to be used in the LUT
-        
-        We are going to take a tensor x. 
+
+        We are going to take a tensor x.
         x = [4, 5, 2]
         We are going to lookup the value from LUT for each value in x.
         return [LUT(4), LUT(5), LUT(2)]
@@ -89,10 +90,12 @@ class TrustedFirstParty(TupleProvider):
         We need a vector for each tensor of size lut_size
 
         """
-        r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
+        r = generate_random_ring_element(tensor_size, device=device) # % lut_size
+        r_clear = r % lut_size
+
         one_hot = []
         for i in range(lut_size):
-            one_hot.append((r == i) * 1)
+            one_hot.append((r_clear == i) * 1)
         one_hot = torch.stack(one_hot)
         one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
         r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
