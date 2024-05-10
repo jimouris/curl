@@ -57,6 +57,8 @@ def _run_experiment(args):
 
     run_benches(args.tensor_size)
 
+    print('Done')
+
 def main(run_experiment):
     args = get_args()
 

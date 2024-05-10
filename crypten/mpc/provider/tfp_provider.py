@@ -7,6 +7,7 @@
 
 import crypten.communicator as comm
 import torch
+import logging
 from crypten.common.rng import generate_kbit_random_tensor, generate_random_ring_element
 from crypten.common.util import count_wraps, torch_stack
 from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
@@ -84,7 +85,7 @@ class TrustedFirstParty(TupleProvider):
 
         one_hot = []
         for i in range(lut_size):
-            one_hot.append((r == i) * 1)
+            one_hot.append((r_clear == i) * 1)
         one_hot = torch.stack(one_hot)
         one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
         r_shares = ArithmeticSharedTensor(r, precision=0, src=0)

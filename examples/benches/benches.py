@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import torch
 import functools
-import yaml
 
 import crypten
 import torch
@@ -15,6 +14,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 from crypten.config import CrypTenConfig
+from crypten.config import cfg
 from omegaconf import OmegaConf
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
@@ -57,20 +57,16 @@ class FuncBenchmarks:
     """
 
     UNARY = [
-        "sigmoid",
-        "relu",
-        "tanh",
+        "sin",
+        "cos",
+        "erf",
         "exp",
+        "gelu",
         "log",
         "reciprocal",
-        "cos",
-        "sin",
-        "sum",
-        "mean",
-        "neg",
-        "erf",
-        "gelu",
-        "silu"
+        "sigmoid",
+        "silu",
+        "tanh",
     ]
 
     DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
@@ -212,13 +208,12 @@ class FuncBenchmarks:
             }
         )
 
-
 def run_benches(tensor_size):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # Run with LUTs
-    crypten.init() # default config
+    # default config
     logging.info("Using LUTs Config")
     functions_data = crypten.cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
@@ -230,9 +225,9 @@ def run_benches(tensor_size):
     logging.info("="*60)
 
     # Run with approximations
-    approximations_cfg = CrypTenConfig.get_default_config_path()
+    approximations_cfg = cfg.get_default_config_path()
     approximations_cfg = approximations_cfg.replace("default", "approximations")
-    crypten.init(approximations_cfg)
+    cfg.load_config(approximations_cfg)
     logging.info("Using Approximation Config")
     functions_data = crypten.cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}

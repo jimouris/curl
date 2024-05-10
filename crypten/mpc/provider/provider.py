@@ -18,6 +18,7 @@ class TupleProvider:
         "generate_binary_triple",
         "wrap_rng",
         "B2A_rng",
+        "generate_one_hot",
     ]
 
     _DEFAULT_CACHE_PATH = os.path.normpath(os.path.join(__file__, "../tuple_cache/"))
@@ -176,3 +177,10 @@ class TupleProvider:
     def B2A_rng(self, size, device=None):
         """Generate random bit tensor as arithmetic and binary shared tensors"""
         raise NotImplementedError("TupleProvider B2A_rng not implemented.")
+
+    def generate_one_hot(self, tensor_size, lut_size, device=None):
+        """Generate random values and their corresponding one hot vectors of
+        given size."""
+        raise NotImplementedError(
+            "TupleProvider generate_one_hot not implemented."
+        )
