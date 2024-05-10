@@ -836,7 +836,7 @@ def gelu(self):
             msb, lsb = abs.divmod(2**truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["gelu_bior"], lsb, truncation)
         check = abs < 2**cfg.functions.gelu_lut_max_bits
-        return relu - (1-check + lut * check)
+        return relu - lut * check
     elif method == "erf":
         gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
         return gelu
@@ -864,7 +864,7 @@ def silu(self):
             msb, lsb = abs.divmod(2**truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["silu_bior"], lsb, truncation)
         check = abs < 2**cfg.functions.silu_lut_max_bits
-        return relu - (1-check + lut * check)
+        return relu - lut * check
     elif method == "sigmoid":
         silu = self * self.sigmoid()
         return silu

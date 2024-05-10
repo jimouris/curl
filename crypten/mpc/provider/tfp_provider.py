@@ -78,18 +78,10 @@ class TrustedFirstParty(TupleProvider):
         return rA, rB
 
     def generate_one_hot(self, tensor_size, lut_size, device=None):
-        """Generate one hot vectors of given sizes to be used in the LUT
-        
-        We are going to take a tensor x. 
-        x = [4, 5, 2]
-        We are going to lookup the value from LUT for each value in x.
-        return [LUT(4), LUT(5), LUT(2)]
-        so we need to generate a random tensor of the size of x s.t. 0 <= r[i] < LUT.size()
-        r = [20, 12, 32]
-        We need a vector for each tensor of size lut_size
+        """Generate one hot vectors of given sizes for lookup tables"""
+        r = generate_random_ring_element(tensor_size, device=device)
+        r_clear = r % lut_size
 
-        """
-        r = generate_random_ring_element(tensor_size, lut_size+1, device=device) % lut_size
         one_hot = []
         for i in range(lut_size):
             one_hot.append((r == i) * 1)
