@@ -126,17 +126,10 @@ class TrustedThirdParty(TupleProvider):
             # Request one_hot vector from TTP
             one_hot_r = TTPClient.get().ttp_request("generate_one_hot", device, tensor_size, lut_size)
         else:
-            one_hot_r = generate_random_ring_element((tensor_size[0], lut_size), generator=generator, device=device)
+            one_hot_r = generate_random_ring_element((lut_size, tensor_size[0]), generator=generator, device=device)
 
         r = ArithmeticSharedTensor.from_shares(r, precision=0)
-        one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r, precision=0)
-
-        level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.INFO)
-        logging.info(f"\tP{comm.get().get_rank()}) r: {r[0]}")
-        logging.info(f"\tP{comm.get().get_rank()}) one_hot_r: {one_hot_r[0]}")
-        logging.getLogger().setLevel(level)
-
+        one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r.t(), precision=0)
         return r, one_hot_r
 
     @staticmethod
@@ -378,14 +371,9 @@ class TTPServer:
         r = self._get_additive_PRSS(tensor_size)
         r_clear = r % lut_size
 
-        level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.INFO)
-        logging.info(f"TTP - P{comm.get().get_rank()}) r: {r[0]} % {lut_size} = r_clear = {r_clear[0]}")
-        logging.getLogger().setLevel(level)
-
         one_hot_clear = []
         for i in range(lut_size):
             one_hot_clear.append((r_clear == i) * 1)
-        one_hot_clear = torch.stack(one_hot_clear).t()
+        one_hot_clear = torch.stack(one_hot_clear)
 
         return one_hot_clear - self._get_additive_PRSS(one_hot_clear.size(), remove_rank=True)
