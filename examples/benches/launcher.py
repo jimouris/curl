@@ -8,6 +8,7 @@ import argparse
 import logging
 import os
 
+import crypten
 from examples.multiprocess_launcher import MultiProcessLauncher
 
 
@@ -42,6 +43,12 @@ def get_args():
         action="store_true",
         help="Run example in multiprocess mode",
     )
+    parser.add_argument(
+        "--approximations",
+        default=False,
+        action="store_true",
+        help="Use approximations for non-linear functions",
+    )
     args = parser.parse_args()
     return args
 
@@ -55,7 +62,14 @@ def _run_experiment(args):
         level = logging.CRITICAL
     logging.getLogger().setLevel(level)
 
-    run_benches(args.tensor_size)
+    cfg_file = crypten.cfg.get_default_config_path()
+    if args.approximations:
+        logging.info("Using Approximation Config:")
+        cfg_file = cfg_file.replace("default", "approximations")
+    else:
+        logging.info("Using LUTs Config:")
+
+    run_benches(cfg_file, args.tensor_size)
 
     print('Done')
 

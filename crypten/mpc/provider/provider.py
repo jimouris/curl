@@ -5,6 +5,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 import os
 
 import crypten
@@ -54,7 +55,7 @@ class TupleProvider:
         """Sets tracing attribute True only if the request cache is empty.
         If `trace_once()` is called again, it sets tracing attribute to False
         """
-        untraced = self.request_cache.empty()
+        untraced = len(self.request_cache) == 0
         self.trace(tracing=untraced)
 
     def _save_requests(self, filepath=None):

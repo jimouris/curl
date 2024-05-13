@@ -208,31 +208,33 @@ class FuncBenchmarks:
             }
         )
 
-def run_benches(tensor_size):
+def run_benches(cfg_file, tensor_size):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
-    # Run with LUTs
-    crypten.init() # default config
-    logging.info("Using LUTs Config")
-    functions_data = crypten.cfg.config.get('functions', {})
+    # First cold run.
+    crypten.init(cfg_file)
+    functions_data = cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
-    logging.info("Config '{}'".format(filtered_data))
+    logging.info("\t'{}'".format(filtered_data))
+    crypten.trace()
+
+    logging.info(f"="*22 + " Without Cache " + "="*22)
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
     logging.info("'{}'".format(benches))
     logging.info("="*60)
 
-    # Run with approximations
-    approximations_cfg = cfg.get_default_config_path()
-    approximations_cfg = approximations_cfg.replace("default", "approximations")
-    cfg.load_config(approximations_cfg)
-    logging.info("Using Approximation Config")
-    functions_data = crypten.cfg.config.get('functions', {})
-    filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
-    logging.info("Config '{}'".format(filtered_data))
+    # Populate the cache.
+    crypten.fill_cache()
+    provider = crypten.mpc.get_default_provider()
+    provider.save_cache()
+    provider.load_cache()
+    crypten.trace(False)
 
+    # Run with the cache.
+    logging.info(f"="*24 + " With Cache " + "="*24)
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
     logging.info("'{}'".format(benches))
