@@ -213,7 +213,7 @@ def run_benches(tensor_size):
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # Run with LUTs
-    # default config
+    crypten.init() # default config
     logging.info("Using LUTs Config")
     functions_data = crypten.cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
