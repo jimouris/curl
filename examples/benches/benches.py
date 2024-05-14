@@ -67,6 +67,8 @@ class FuncBenchmarks:
         "sigmoid",
         "silu",
         "tanh",
+        "sqrt",
+        "inv_sqrt",
     ]
 
     DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
@@ -95,6 +97,9 @@ class FuncBenchmarks:
         elif func == "silu":
             silu = lambda x: x * x.sigmoid()
             return silu(x)
+        elif func == "inv_sqrt":
+            inv_sqrt = lambda x: x.sqrt().reciprocal()
+            return inv_sqrt(x)
         if y is None:
             return getattr(x, func)()
 
@@ -168,6 +173,9 @@ class FuncBenchmarks:
         elif func in ["silu"]:
             silu = lambda x: x * x.sigmoid()
             ref, out_enc = silu(DOMAIN), getattr(DOMAIN_enc, func)()
+        elif func in ["inv_sqrt"]:
+            inv_sqrt = lambda x: x.sqrt().reciprocal()
+            ref, out_enc = inv_sqrt(DOMAIN), getattr(DOMAIN_enc, func)()
         elif func in FuncBenchmarks.UNARY:
             ref, out_enc = getattr(DOMAIN, func)(), getattr(DOMAIN_enc, func)()
         else:
