@@ -14,7 +14,7 @@ functions:
   exp_iterations: 8
   exp_haar_size_bits: 10
   exp_bior_size_bits: 5
-  exp_lut_max_bits: 3
+  exp_lut_max_bits: 4
   exp_all_neg: True
   exp_neg_lut_size: 256 # 2^8
 
@@ -61,8 +61,8 @@ functions:
   sigmoid_tanh_terms: 32
   sigmoid_tanh_haar_size_bits: 10
   sigmoid_tanh_bior_size_bits: 6
-  sigmoid_lut_max_bits: 4
-  tanh_lut_max_bits: 4
+  sigmoid_lut_max_bits: 4 # [-16, 16]
+  tanh_lut_max_bits: 3 # [-8, 8]
 
   # trigonometry configuration
   # trigonometry_method: "NR"
@@ -77,7 +77,7 @@ functions:
   erf_iterations: 8
   erf_haar_size_bits: 10
   erf_bior_size_bits: 5
-  erf_lut_max_bits: 4 # 2^3
+  erf_lut_max_bits: 2 # [-4, 4]
 
   # gelu configuration:
   # gelu_method: "erf"
@@ -91,7 +91,7 @@ functions:
   silu_method: "bior"
   silu_haar_size_bits: 7
   silu_bior_size_bits: 4
-  silu_lut_max_bits: 4
+  silu_lut_max_bits: 4 # [-16, 16]
 mpc:
   active_security: False
   provider: "TFP"
