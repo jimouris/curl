@@ -216,12 +216,12 @@ class FuncBenchmarks:
             }
         )
 
-def run_benches(cfg_file, tensor_size):
+def run_benches(cfg_file, tensor_size, party_name):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file)
+    crypten.init(cfg_file, party_name=party_name)
     functions_data = cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
     logging.info("\t'{}'".format(filtered_data))

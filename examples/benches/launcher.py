@@ -49,6 +49,12 @@ def get_args():
         action="store_true",
         help="Use approximations for non-linear functions",
     )
+    parser.add_argument(
+        "--party_name",
+        default=False,
+        type=str,
+        help="The name of the party",
+    )
     args = parser.parse_args()
     return args
 
@@ -69,7 +75,7 @@ def _run_experiment(args):
     else:
         logging.info("Using LUTs Config:")
 
-    run_benches(cfg_file, args.tensor_size)
+    run_benches(cfg_file, args.tensor_size, args.party_name)
 
     print('Done')
 

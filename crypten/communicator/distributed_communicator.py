@@ -52,16 +52,24 @@ class DistributedCommunicator(Communicator):
 
             # initialize process group:
             total_ws = self.world_size + 1 if init_ttp else self.world_size
+            logging.info(f"DistributedCommunicator: {total_ws}, init_ttp: {init_ttp}")
+            logging.info(f"distributed_backend: {self.distributed_backend}")
+            logging.info(f"rendezvous: {self.rendezvous}")
+            logging.info(f"rank: {self.rank}")
+
             dist.init_process_group(
                 backend=self.distributed_backend,
                 init_method=self.rendezvous,
                 world_size=total_ws,
                 rank=self.rank,
             )
+            logging.info("DistributedCommunicator: dist.init_process_group")
             self.ttp_group = dist.new_group(list(range(total_ws)))
             if total_ws > 1:
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
+            logging.info("DistributedCommunicator: dist.new_group")
             self.main_group = dist.new_group(list(range(self.world_size)))
+            logging.info("DistributedCommunicator: dist.main_group")
             self.ttp_initialized = init_ttp
             logging.info("World size = %d" % self.world_size)
 
