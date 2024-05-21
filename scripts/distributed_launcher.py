@@ -10,6 +10,8 @@ import subprocess
 import uuid
 from argparse import ArgumentParser, REMAINDER
 
+import crypten
+
 
 """
 Wrapper to launch MPC scripts as multiple processes.
@@ -27,15 +29,23 @@ def main():
 
     # Use random file so multiple jobs can be run simultaneously
     INIT_METHOD = "file:///tmp/crypten-rendezvous-{}".format(uuid.uuid1())
+    current_env["RENDEZVOUS"] = INIT_METHOD
 
     for rank in range(0, args.world_size):
         # each process's rank
         current_env["RANK"] = str(rank)
-        current_env["RENDEZVOUS"] = INIT_METHOD
 
         # spawn the processes
         cmd = [args.training_script] + args.training_script_args
+        print(f"Run command: {cmd} in Party-{rank}")
+        process = subprocess.Popen(cmd, env=current_env)
+        processes.append(process)
 
+    if crypten.mpc.ttp_required():
+        current_env["RANK"] = str(args.world_size)
+        # TODO: this runs the init of TTPServer and stucks in the while true loop
+        cmd = [crypten.mpc.provider.TTPServer()]
+        print(f"Run command: {cmd} in Party-TTP")
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
 

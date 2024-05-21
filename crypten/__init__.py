@@ -45,7 +45,7 @@ generators = {
 def init(config_file=None, party_name=None, device=None):
     """
     Initialize CrypTen. It will initialize communicator, setup party
-    name for file save / load, and setup seeds for Random Number Generatiion.
+    name for file save / load, and setup seeds for Random Number Generation.
     By default the function will initialize a set of RNG generators on CPU.
     If torch.cuda.is_available() returns True, it will initialize an additional
     set of RNG generators on GPU. Users can specify the GPU device the generators are
@@ -59,13 +59,17 @@ def init(config_file=None, party_name=None, device=None):
     # Load config file
     if config_file is not None:
         cfg.load_config(config_file)
-
+    level = logging.getLogger().level
+    logging.getLogger().setLevel(logging.INFO)
     # Return and raise warning if initialized
     if comm.is_initialized():
+        logging.info(f"Comm is initialized for {party_name}")
         return
 
     # Initialize communicator
     # os.environ["GLOO_SOCKET_IFNAME"] = "en0"
+
+    logging.info(f"party_name {party_name}")
     comm._init(use_threads=False, init_ttp=crypten.mpc.ttp_required())
 
     # Setup party name for file save / load
@@ -73,6 +77,7 @@ def init(config_file=None, party_name=None, device=None):
         comm.get().set_name(party_name)
 
     crypten.common.functions.approximations.LookupTables()
+    logging.getLogger().setLevel(level)
 
     # Setup seeds for Random Number Generation
     if comm.get().get_rank() < comm.get().get_world_size():

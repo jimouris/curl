@@ -152,7 +152,10 @@ class TTPClient:
             self.ttp_group = comm.get().ttp_group
             self.comm_group = comm.get().ttp_comm_group
             self._setup_generators()
+            level = logging.getLogger().level
+            logging.getLogger().setLevel(logging.INFO)
             logging.info(f"TTPClient {comm.get().get_rank()} initialized")
+            logging.getLogger().setLevel(level)
 
         def _setup_generators(self):
             """Setup RNG generator shared between each party (client) and the TTPServer"""

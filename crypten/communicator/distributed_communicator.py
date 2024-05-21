@@ -45,24 +45,20 @@ class DistributedCommunicator(Communicator):
             self.reset_communication_stats()
             self._name = f"rank{self.rank}"
 
-            # logging:
-            logging.info("==================")
-            logging.info("DistributedCommunicator with rank %d" % self.rank)
-            logging.info("==================")
-
             # initialize process group:
             total_ws = self.world_size + 1 if init_ttp else self.world_size
-            logging.info(f"DistributedCommunicator: {total_ws}, init_ttp: {init_ttp}")
-            logging.info(f"distributed_backend: {self.distributed_backend}")
-            logging.info(f"rendezvous: {self.rendezvous}")
-            logging.info(f"rank: {self.rank}")
+            logging.info(f"DistributedCommunicator ({self.rank}): {total_ws}, init_ttp: {init_ttp}")
+            logging.info(f"distributed_backend ({self.rank}): {self.distributed_backend}")
+            logging.info(f"rendezvous ({self.rank}): {self.rendezvous}")
 
+# TODO: Hangs here
             dist.init_process_group(
                 backend=self.distributed_backend,
                 init_method=self.rendezvous,
                 world_size=total_ws,
                 rank=self.rank,
             )
+
             logging.info("DistributedCommunicator: dist.init_process_group")
             self.ttp_group = dist.new_group(list(range(total_ws)))
             if total_ws > 1:

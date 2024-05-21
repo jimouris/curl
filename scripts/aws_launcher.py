@@ -283,6 +283,8 @@ def main():
             # some environment variables" according to paramiko document.
             # As a workaround, here all environment variables are explicitly
             # exported.
+            # Run command: export WORLD_SIZE=2; export RENDEZVOUS=env://; export MASTER_ADDR=172.31.9.57; export MASTER_PORT=29500; export RANK=0; cd aws-launcher-tmp-21096b1c-16ab-11ef-9c02-767dd5f880da ;  ./launcher.py --tensor_size 10,10
+
             environment_cmd = "; ".join(
                 [f"export {key}={value}" for (key, value) in environment.items()]
             )
