@@ -246,7 +246,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
     scaling = scale.flatten()
     scaling.encoder._precision_bits = 0
     lut = (lut1 - lut0) * scaling + 2**bias * lut0
-    result = lut.div(int(2**(1.5*bias)))
+    result = lut.div(int(2**(2*bias)))
     result = result.reshape(shape)
     result.encoder._precision_bits = bits
     return result

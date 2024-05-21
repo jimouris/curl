@@ -77,7 +77,7 @@ class LookupTables:
         coeffs, *_ = pywt.wavedec(full, 'bior2.2', level=depth)
         # coeffs = coeffs[:2**lut_bits]
         coeffs = np.stack([np.roll(coeffs, -2)[:2**lut_bits], np.roll(coeffs, -3)[:2**lut_bits]])
-        cls.LUTs[name] = torch.tensor(coeffs * scale).long()
+        cls.LUTs[name] = torch.tensor((coeffs * scale) * 2**(depth*0.5)).long()
 
     @classmethod
     def initialize_luts(cls):
