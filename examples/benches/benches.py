@@ -58,17 +58,17 @@ class FuncBenchmarks:
 
     UNARY = [
         "sin",
-        "cos",
-        "erf",
-        "exp",
-        "gelu",
-        "log",
-        "reciprocal",
-        "sigmoid",
-        "silu",
-        "tanh",
-        "sqrt",
-        "inv_sqrt",
+        # "cos",
+        # "erf",
+        # "exp",
+        # "gelu",
+        # "log",
+        # "reciprocal",
+        # "sigmoid",
+        # "silu",
+        # "tanh",
+        # "sqrt",
+        # "inv_sqrt",
     ]
 
     DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
@@ -89,7 +89,7 @@ class FuncBenchmarks:
 
     @staticmethod
     @time_me
-    def time_func(x, func, y=None):
+    def time_func(x, func):
         """Invokes func as a method of x"""
         if func == "gelu":
             gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
@@ -100,10 +100,8 @@ class FuncBenchmarks:
         elif func == "inv_sqrt":
             inv_sqrt = lambda x: x.sqrt().reciprocal()
             return inv_sqrt(x)
-        if y is None:
-            return getattr(x, func)()
 
-        return getattr(x, func)(y)
+        return getattr(x, func)()
 
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
@@ -209,8 +207,6 @@ class FuncBenchmarks:
             {
                 "function": FuncBenchmarks.UNARY,
                 "runtime": [r.mid for r in runtimes_enc],
-                "runtime Q1": [r.q1 for r in runtimes_enc],
-                "runtime Q3": [r.q3 for r in runtimes_enc],
                 "total abs err.": abs_errors,
                 "avg relative err.": relative_errors,
             }
@@ -231,7 +227,7 @@ def run_benches(cfg_file, tensor_size, party_name):
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    logging.info("'{}'".format(benches))
+    logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
     # Populate the cache.
@@ -245,4 +241,4 @@ def run_benches(cfg_file, tensor_size, party_name):
     logging.info(f"="*24 + " With Cache " + "="*24)
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    logging.info("'{}'".format(benches))
+    logging.info("'\n{}\n'".format(benches))

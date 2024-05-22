@@ -28,11 +28,7 @@ def _init(use_threads, rank=0, world_size=1, init_ttp=False):
     cls = InProcessCommunicator if __use_threads else DistributedCommunicator
 
     if cls.is_initialized():
-        level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.INFO)
         logging.info(f"Communicator is initialized")
-        logging.getLogger().setLevel(level)
-
         return
 
     cls.initialize(rank, world_size, init_ttp=init_ttp)
