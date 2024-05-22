@@ -5,6 +5,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 import os
 import subprocess
 import uuid
@@ -37,17 +38,16 @@ def main():
 
         # spawn the processes
         cmd = [args.training_script] + args.training_script_args
-        print(f"Run command: {cmd} in Party-{rank}")
+        print(f"Run command: {cmd} in Party-{rank} with rendezvous: {INIT_METHOD}")
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
-
+    
+    current_env["DISTRIBUTED_BACKEND"] = "gloo"
     if crypten.mpc.ttp_required():
         current_env["RANK"] = str(args.world_size)
-        # TODO: this runs the init of TTPServer and stucks in the while true loop
-        cmd = [crypten.mpc.provider.TTPServer()]
-        print(f"Run command: {cmd} in Party-TTP")
+        print(f"Run command: in Party-TTP with rendezvous: {INIT_METHOD}")
+        cmd = ['./scripts/ttp_launcher.py']
         process = subprocess.Popen(cmd, env=current_env)
-        processes.append(process)
 
     for process in processes:
         process.wait()

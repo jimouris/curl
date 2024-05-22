@@ -34,7 +34,7 @@ def get_args():
         "-s",
         "--tensor_size",
         type=tuple_type,
-        default=(100, 100),
+        default=(10, 10),
         help="The size of the tensors as a tuple of integers separated by commas (e.g., '100,100,50')",
     )
     parser.add_argument(
@@ -51,7 +51,7 @@ def get_args():
     )
     parser.add_argument(
         "--party_name",
-        default=False,
+        default=None,
         type=str,
         help="The name of the party",
     )
