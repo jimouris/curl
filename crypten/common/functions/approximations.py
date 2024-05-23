@@ -177,19 +177,19 @@ class LookupTables:
         if cfg.functions.trigonometry_method in ("haar", "bior"):
             cls.generate_haar(3,
                               cfg.functions.trigonometry_haar_size_bits,
-                              np.sin,
+                              lambda x: np.sin(x/np.pi/2),
                               "sin_haar")
             cls.generate_bior(3,
                               cfg.functions.trigonometry_bior_size_bits,
-                              np.sin,
+                              lambda x: np.sin(x/np.pi/2),
                               "sin_bior")
             cls.generate_haar(3,
                               cfg.functions.trigonometry_haar_size_bits,
-                              np.cos,
+                              lambda x: np.cos(x/np.pi/2),
                               "cos_haar")
             cls.generate_bior(3,
                               cfg.functions.trigonometry_bior_size_bits,
-                              np.cos,
+                              lambda x: np.cos(x/np.pi/2),
                               "cos_bior")
 
         """Sigmoid & Tanh LUT"""
@@ -572,8 +572,9 @@ def cossin(self):
         luts = LookupTables()
         sgn = self.sign()
         pos = sgn * self
-        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
-        mod = pos.mod(tau)
+        tau = int(np.floor(2 * np.pi))
+        self = self.div(tau)
+        mod = pos.mod(2**cfg.encoder.precision_bits)
         if method == "haar":
             trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
             msb = mod.div(2**trig_truncation)
@@ -598,25 +599,7 @@ def cos(self):
     Args:
         iterations (int): for approximating exp(i * x)
     """
-    method = cfg.functions.trigonometry_method
-    if method in ("haar", "bior"):
-        luts = LookupTables()
-        sgn = self.sign()
-        pos = sgn * self
-        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
-        mod = pos.mod(tau)
-        if method == "haar":
-            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
-            msb = mod.div(2**trig_truncation)
-            return msb.evaluate_lut(luts.LUTs["cos_haar"])
-        elif method == "bior":
-            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_bior_size_bits
-            msb, lsb = mod.divmod(2**trig_truncation)
-            return msb.evaluate_bior_lut(luts.LUTs["cos_bior"], lsb, trig_truncation)
-    elif method == "NR":
-        return cossin(self)[0]
-    else:
-        raise ValueError(f"Invalid method {method} given for cos function")
+    return cossin(self)[0]
 
 
 def sin(self):
@@ -625,26 +608,7 @@ def sin(self):
     Args:
         iterations (int): for approximating exp(i * x)
     """
-    method = cfg.functions.trigonometry_method
-    if method in ("haar", "bior"):
-        luts = LookupTables()
-        sgn = self.sign()
-        pos = sgn * self
-        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
-        mod = pos.mod(tau)
-        if method == "haar":
-            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
-            msb = mod.div(2**trig_truncation)
-            lut = msb.evaluate_lut(luts.LUTs["sin_haar"])
-        elif method == "bior":
-            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_bior_size_bits
-            msb, lsb = mod.divmod(2**trig_truncation)
-            lut = msb.evaluate_bior_lut(luts.LUTs["sin_bior"], lsb, trig_truncation)
-        return lut * sgn
-    elif method == "NR":
-        return cossin(self)[1]
-    else:
-        raise ValueError(f"Invalid method {method} given for sin function")
+    return cossin(self)[1]
 
 
 # Logistic Functions
