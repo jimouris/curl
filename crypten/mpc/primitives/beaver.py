@@ -189,10 +189,8 @@ def evaluate_lut(x, lut):
     with IgnoreEncodings([x, r]):
         z = (x - r) % size
         shift_amount = z.reveal() % size
-    
+
     if shift_amount.size():
-        # for i in range(shift_amount.size()[0]):
-        #     one_hot_r[i] = one_hot_r[i].roll(int(shift_amount[i]))
         indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
         lookup = one_hot_r * lut
@@ -211,7 +209,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
         x (torch.Tensor): Input tensor.
         luts (torch.Tensor): Look-Up Table tensors.
         scale (torch.Tensor): Scaling factor for the lookups.
-        bias (int): 
+        bias (int): Bias for the LUT.
 
     Returns:
         torch.Tensor: Result tensor after applying the LUT.
@@ -228,7 +226,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
     with IgnoreEncodings([x, r]):
         z = (x - r) % size
         shift_amount = z.reveal() % size
-    
+
     if shift_amount.size():
         indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
@@ -242,13 +240,11 @@ def evaluate_bior_lut(x, luts, scale, bias):
         lut0 = lookup0.sum()
         lookup1 = one_hot_r * luts[1]
         lut1 = lookup1.sum()
-    bits = scale.encoder._precision_bits
-    scaling = scale.flatten()
-    scaling.encoder._precision_bits = 0
-    lut = (lut1 - lut0) * scaling + 2**bias * lut0
-    result = lut.div(int(2**(2*bias)))
-    result = result.reshape(shape)
-    result.encoder._precision_bits = bits
+    with IgnoreEncodings([scale]):
+        scaling = scale.flatten()
+        lut = (lut1 - lut0) * scaling + 2**bias * lut0
+        result = lut.div(int(2**(2*bias)))
+        result = result.reshape(shape)
     return result
 
 def AND(x, y):

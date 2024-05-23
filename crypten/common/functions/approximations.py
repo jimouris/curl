@@ -75,7 +75,6 @@ class LookupTables:
         depth = max_bits + cfg.encoder.precision_bits - lut_bits
         full = function(np.linspace(1.0/scale, max_element, max_element * scale))
         coeffs, *_ = pywt.wavedec(full, 'bior2.2', level=depth)
-        # coeffs = coeffs[:2**lut_bits]
         coeffs = np.stack([np.roll(coeffs, -2)[:2**lut_bits], np.roll(coeffs, -3)[:2**lut_bits]])
         cls.LUTs[name] = torch.tensor((coeffs * scale) * 2**(depth*0.5)).long()
 
@@ -570,7 +569,23 @@ def cossin(self):
     """
     method = cfg.functions.trigonometry_method
     if method in ("haar", "bior"):
-        return cos(self), sin(self)
+        luts = LookupTables()
+        sgn = self.sign()
+        pos = sgn * self
+        tau = int(np.floor(2 * np.pi * 2**cfg.encoder.precision_bits))
+        mod = pos.mod(tau)
+        if method == "haar":
+            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
+            msb = mod.div(2**trig_truncation)
+            cos = msb.evaluate_lut(luts.LUTs["cos_haar"])
+            sin = msb.evaluate_lut(luts.LUTs["sin_haar"])
+        elif method == "bior":
+            trig_truncation = 3 + cfg.encoder.precision_bits - cfg.functions.trigonometry_bior_size_bits
+            msb, lsb = mod.divmod(2**trig_truncation)
+            cos = msb.evaluate_bior_lut(luts.LUTs["cos_bior"], lsb, trig_truncation)
+            sin = msb.evaluate_bior_lut(luts.LUTs["sin_bior"], lsb, trig_truncation)
+        sin = sgn * sin
+        return cos, sin
     elif method == "NR":
         return self._eix()
     else:
