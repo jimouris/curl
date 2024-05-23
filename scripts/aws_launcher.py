@@ -262,15 +262,13 @@ def main():
 # TODO: rename training_script_args
     print(f"training_script_args: {args.training_script_args}")
 
-    # TODO
-    rendezvous = "env://"
-    if crypten.mpc.ttp_required():
-        rendezvous =  f"tcp://{master_instance.private_ip_address}:{args.master_port}"
+    rendezvous = f"tcp://{master_instance.private_ip_address}:{args.master_port}"
     environment = {
         "WORLD_SIZE": str(world_size),
         "RENDEZVOUS": rendezvous,
         "MASTER_ADDR": master_instance.private_ip_address,
         "MASTER_PORT": str(args.master_port),
+        "DISTRIBUTED_BACKEND": "gloo",
     }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=world_size) as executor:
@@ -283,7 +281,6 @@ def main():
             # some environment variables" according to paramiko document.
             # As a workaround, here all environment variables are explicitly
             # exported.
-            # Run command: export WORLD_SIZE=2; export RENDEZVOUS=env://; export MASTER_ADDR=172.31.9.57; export MASTER_PORT=29500; export RANK=0; cd aws-launcher-tmp-21096b1c-16ab-11ef-9c02-767dd5f880da ;  ./launcher.py --tensor_size 10,10
 
             environment_cmd = "; ".join(
                 [f"export {key}={value}" for (key, value) in environment.items()]
@@ -296,8 +293,8 @@ def main():
                 f"./{script_basename}",
                 " ".join(args.training_script_args) + " --party_name Party-" + str(rank),
             )
-            print(f"Run command: {cmd} in {instance_id}")
-            executor.submit(run_command, instance_id, client, cmd, )
+            print(f"Run command: {cmd} in {instance_id} with rendezvous: {rendezvous}")
+            executor.submit(run_command, instance_id, client, cmd, environment)
             rank += 1
 
         if crypten.mpc.ttp_required():
@@ -315,8 +312,7 @@ def main():
                 prepare_cmd,
                 crypten.mpc.provider.TTPServer,
             )
-
-            print(f"Run TTP command: {cmd} in { ttp_instance.id}")
+            print(f"Run TTP command: {cmd} in { ttp_instance.id} with rendezvous: {rendezvous}")
             executor.submit(run_command, ttp_instance, client, cmd, environment)
 
     print(f"Waiting to cleanup...")

@@ -41,12 +41,12 @@ def main():
         print(f"Run command: {cmd} in Party-{rank} with rendezvous: {INIT_METHOD}")
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
-    
+
     current_env["DISTRIBUTED_BACKEND"] = "gloo"
     if crypten.mpc.ttp_required():
         current_env["RANK"] = str(args.world_size)
-        print(f"Run command: in Party-TTP with rendezvous: {INIT_METHOD}")
         cmd = ['./scripts/ttp_launcher.py']
+        print(f"Run command: {cmd} in Party-TTP with rendezvous: {INIT_METHOD}")
         process = subprocess.Popen(cmd, env=current_env)
 
     for process in processes:

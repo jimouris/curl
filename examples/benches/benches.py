@@ -13,9 +13,7 @@ import torch
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-from crypten.config import CrypTenConfig
 from crypten.config import cfg
-from omegaconf import OmegaConf
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -58,17 +56,17 @@ class FuncBenchmarks:
 
     UNARY = [
         "sin",
-        # "cos",
-        # "erf",
-        # "exp",
-        # "gelu",
-        # "log",
-        # "reciprocal",
-        # "sigmoid",
-        # "silu",
-        # "tanh",
-        # "sqrt",
-        # "inv_sqrt",
+        "cos",
+        "erf",
+        "exp",
+        "gelu",
+        "log",
+        "reciprocal",
+        "sigmoid",
+        "silu",
+        "tanh",
+        "sqrt",
+        "inv_sqrt",
     ]
 
     DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
