@@ -71,9 +71,26 @@ class FuncBenchmarks:
         "inv_sqrt",
     ]
 
-    DOMAIN = torch.arange(start=1.01, end=10, step=0.01)
-    # for exponential, sin, and cos
-    TRUNCATED_DOMAIN = torch.arange(start=0.001, end=10, step=0.001)
+    # (start, end, step))
+    DOMAINS = {
+        "sin": (0.001, 10, 0.001),
+        "cos": (0.001, 10, 0.001),
+        "erf":  (-64, 64, 0.1),
+        "exp": (0.001, 10, 0.001),
+        "gelu":  (1.0, 64, 0.1),
+        "log":  (1.0, 64, 0.1),
+        # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=0.1) both world have smaller average errors. Range: 1, 64. Size: 8 bits
+        # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=1) both world have smaller average errors. Range: 1, 64. Size: 7 bits
+        "reciprocal": (1.0, 64, 0.1),
+        # Haar performs better for sigmoid in practice
+        "sigmoid":  (-64, 64, 0.1), 
+        "silu":  (1.0, 64, 0.1),
+        # Haar performs better for tanh in practicer
+        "tanh":  (1.0, 64, 0.1),
+        "sqrt":  (1.0, 64, 0.1),
+        "inv_sqrt":  (1.0, 64, 0.1),
+    }
+
 
     def __init__(self, tensor_size, device="cpu"):
         self.device = torch.device(device)
@@ -149,25 +166,17 @@ class FuncBenchmarks:
 
         Returns: tuple of (plain text result, encrypted result)
         """
-        DOMAIN, TRUNCATED_DOMAIN = (
-            FuncBenchmarks.DOMAIN,
-            FuncBenchmarks.TRUNCATED_DOMAIN,
-        )
-        if hasattr(DOMAIN, "to") and hasattr(TRUNCATED_DOMAIN, "to"):
-            DOMAIN, TRUNCATED_DOMAIN = (
-                DOMAIN.to(device=self.device),
-                TRUNCATED_DOMAIN.to(device=self.device),
-            )
+        # Get domain elements for func
+        start, end, step = FuncBenchmarks.DOMAINS[func]
+
+        DOMAIN = torch.arange(start=start, end=end, step=step)
+        if hasattr(DOMAIN, "to"):
+            DOMAIN = DOMAIN.to(device=self.device)
+
         y = torch.rand(DOMAIN.shape, device=self.device)
         DOMAIN_enc, _ = crypten.cryptensor(DOMAIN), crypten.cryptensor(y)
-        TRUNCATED_DOMAIN_enc = crypten.cryptensor(TRUNCATED_DOMAIN)
 
-        if func in ["exp", "cos", "sin"]:
-            ref, out_enc = (
-                getattr(TRUNCATED_DOMAIN, func)(),
-                getattr(TRUNCATED_DOMAIN_enc, func)(),
-            )
-        elif func in ["gelu"]:
+        if func in ["gelu"]:
             gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
             ref, out_enc = gelu(DOMAIN), getattr(DOMAIN_enc, func)()
         elif func in ["silu"]:
