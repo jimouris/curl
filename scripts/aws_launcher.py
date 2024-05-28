@@ -66,6 +66,7 @@ from pathlib import Path
 
 import boto3
 import paramiko
+import crypten
 
 
 def get_instances(ec2, instance_ids):
@@ -253,14 +254,21 @@ def main():
                     os.path.join(remote_dir, os.path.basename(local_path)),
                 )
     for instance_id, client in client_dict.items():
+        print(f"Run command: chmod +x {remote_script}")
         run_command(instance_id, client, f"chmod +x {remote_script}")
+        print(f"Run command: ls -al {remote_dir}")
         run_command(instance_id, client, f"ls -al {remote_dir}")
 
+# TODO: rename training_script_args
+    print(f"training_script_args: {args.training_script_args}")
+
+    rendezvous = f"tcp://{master_instance.private_ip_address}:{args.master_port}"
     environment = {
         "WORLD_SIZE": str(world_size),
-        "RENDEZVOUS": "env://",
+        "RENDEZVOUS": rendezvous,
         "MASTER_ADDR": master_instance.private_ip_address,
         "MASTER_PORT": str(args.master_port),
+        "DISTRIBUTED_BACKEND": "gloo",
     }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=world_size) as executor:
@@ -273,6 +281,7 @@ def main():
             # some environment variables" according to paramiko document.
             # As a workaround, here all environment variables are explicitly
             # exported.
+
             environment_cmd = "; ".join(
                 [f"export {key}={value}" for (key, value) in environment.items()]
             )
@@ -282,11 +291,31 @@ def main():
                 f"cd {remote_dir} ;",
                 prepare_cmd,
                 f"./{script_basename}",
-                " ".join(args.training_script_args),
+                " ".join(args.training_script_args) + " --party_name Party-" + str(rank),
             )
-            print(f"Run command: {cmd}")
+            print(f"Run command: {cmd} in {instance_id} with rendezvous: {rendezvous}")
             executor.submit(run_command, instance_id, client, cmd, environment)
             rank += 1
+
+        if crypten.mpc.ttp_required():
+            ttp_instance = master_instance
+            client = client_dict[ttp_instance.id]
+
+            environment["RANK"] = str(rank)
+            environment_cmd = "; ".join(
+                [f"export {key}={value}" for (key, value) in environment.items()]
+            )
+            prepare_cmd = f"{args.prepare_cmd}; " if args.prepare_cmd else ""
+            cmd = "{}; {} {} {}".format(
+                environment_cmd,
+                f"cd {remote_dir} ;",
+                prepare_cmd,
+                crypten.mpc.provider.TTPServer,
+            )
+            print(f"Run TTP command: {cmd} in { ttp_instance.id} with rendezvous: {rendezvous}")
+            executor.submit(run_command, ttp_instance, client, cmd, environment)
+
+    print(f"Waiting to cleanup...")
 
     # Cleanup temp dir.
     for instance_id, client in client_dict.items():

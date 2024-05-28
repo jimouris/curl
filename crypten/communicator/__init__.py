@@ -5,6 +5,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 from .communicator import Communicator
 from .distributed_communicator import DistributedCommunicator
 from .in_process_communicator import InProcessCommunicator
@@ -27,6 +28,7 @@ def _init(use_threads, rank=0, world_size=1, init_ttp=False):
     cls = InProcessCommunicator if __use_threads else DistributedCommunicator
 
     if cls.is_initialized():
+        logging.info(f"Communicator is initialized")
         return
 
     cls.initialize(rank, world_size, init_ttp=init_ttp)

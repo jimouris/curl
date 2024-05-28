@@ -13,9 +13,7 @@ import torch
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-from crypten.config import CrypTenConfig
 from crypten.config import cfg
-from omegaconf import OmegaConf
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -104,7 +102,7 @@ class FuncBenchmarks:
 
     @staticmethod
     @time_me
-    def time_func(x, func, y=None):
+    def time_func(x, func):
         """Invokes func as a method of x"""
         if func == "gelu":
             gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
@@ -115,10 +113,8 @@ class FuncBenchmarks:
         elif func == "inv_sqrt":
             inv_sqrt = lambda x: x.sqrt().reciprocal()
             return inv_sqrt(x)
-        if y is None:
-            return getattr(x, func)()
 
-        return getattr(x, func)(y)
+        return getattr(x, func)()
 
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
@@ -229,20 +225,18 @@ class FuncBenchmarks:
             {
                 "function": FuncBenchmarks.UNARY,
                 "runtime": [r.mid for r in runtimes_enc],
-                "runtime Q1": [r.q1 for r in runtimes_enc],
-                "runtime Q3": [r.q3 for r in runtimes_enc],
                 "total abs err.": abs_errors,
                 "avg abs err.": avg_abs_errors,
                 "avg relative err.": relative_errors,
             }
         )
 
-def run_benches(cfg_file, tensor_size):
+def run_benches(cfg_file, tensor_size, party_name):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file)
+    crypten.init(cfg_file, party_name=party_name)
     functions_data = cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
     logging.info("\t'{}'".format(filtered_data))
@@ -252,7 +246,7 @@ def run_benches(cfg_file, tensor_size):
 
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    logging.info("'{}'".format(benches))
+    logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
     # Populate the cache.
@@ -266,4 +260,4 @@ def run_benches(cfg_file, tensor_size):
     logging.info(f"="*24 + " With Cache " + "="*24)
     benches = FuncBenchmarks(tensor_size, device=device)
     benches.run()
-    logging.info("'{}'".format(benches))
+    logging.info("'\n{}\n'".format(benches))

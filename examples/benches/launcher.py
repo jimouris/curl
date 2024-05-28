@@ -34,7 +34,7 @@ def get_args():
         "-s",
         "--tensor_size",
         type=tuple_type,
-        default=(100, 100),
+        default=(10, 10),
         help="The size of the tensors as a tuple of integers separated by commas (e.g., '100,100,50')",
     )
     parser.add_argument(
@@ -48,6 +48,12 @@ def get_args():
         default=False,
         action="store_true",
         help="Use approximations for non-linear functions",
+    )
+    parser.add_argument(
+        "--party_name",
+        default=None,
+        type=str,
+        help="The name of the party",
     )
     args = parser.parse_args()
     return args
@@ -69,7 +75,7 @@ def _run_experiment(args):
     else:
         logging.info("Using LUTs Config:")
 
-    run_benches(cfg_file, args.tensor_size)
+    run_benches(cfg_file, args.tensor_size, args.party_name)
 
     print('Done')
 

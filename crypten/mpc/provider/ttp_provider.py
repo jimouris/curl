@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import os
 
 import crypten
 import crypten.communicator as comm
@@ -229,7 +230,19 @@ class TTPServer:
     def __init__(self):
         """Initializes a Trusted Third Party server that receives requests"""
         # Initialize connection
+        logging.info("TTPServer: Initializing...")
+
+        env_vars = {}
+        for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
+            if key.upper() not in os.environ:
+                raise ValueError("Environment variable %s must be set." % key)
+            env_vars[key.lower()] = os.environ[key.upper()]
+
+        logging.info("TTPServer: before crypten init.")
+        logging.info(f"TTPServer: env: {env_vars}")
         crypten.init()
+        logging.info("TTPServer: crypten init done.")
+
         self.ttp_group = comm.get().ttp_group
         self.comm_group = comm.get().ttp_comm_group
         self.device = "cpu"
@@ -237,6 +250,7 @@ class TTPServer:
         ttp_rank = comm.get().get_ttp_rank()
 
         logging.info("TTPServer Initialized")
+        
         try:
             while True:
                 # Wait for next request from client

@@ -33,7 +33,7 @@ class DistributedCommunicator(Communicator):
     def __init__(self, init_ttp=False):
         # no need to do anything if we already initialized the communicator:
         if not dist.is_initialized():
-            # get configuration variables from environmens:
+            # get configuration variables from environments:
             for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
                 if key.upper() not in os.environ:
                     raise ValueError("Environment variable %s must be set." % key)
@@ -45,25 +45,24 @@ class DistributedCommunicator(Communicator):
             self.reset_communication_stats()
             self._name = f"rank{self.rank}"
 
-            # logging:
-            logging.info("==================")
-            logging.info("DistributedCommunicator with rank %d" % self.rank)
-            logging.info("==================")
-
             # initialize process group:
             total_ws = self.world_size + 1 if init_ttp else self.world_size
+            logging.info(f"DistributedCommunicator ({self.rank}): Total world size {total_ws}, init_ttp: {init_ttp}")
+            logging.info(f"distributed_backend ({self.rank}): {self.distributed_backend}")
+            logging.info(f"rendezvous ({self.rank}): {self.rendezvous}")
+
             dist.init_process_group(
                 backend=self.distributed_backend,
                 init_method=self.rendezvous,
                 world_size=total_ws,
                 rank=self.rank,
             )
+
             self.ttp_group = dist.new_group(list(range(total_ws)))
             if total_ws > 1:
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
             self.main_group = dist.new_group(list(range(self.world_size)))
             self.ttp_initialized = init_ttp
-            logging.info("World size = %d" % self.world_size)
 
     @classmethod
     def is_initialized(cls):
