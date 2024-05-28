@@ -73,22 +73,20 @@ class FuncBenchmarks:
 
     # (start, end, step))
     DOMAINS = {
-        "sin": (0.001, 10, 0.001),
-        "cos": (0.001, 10, 0.001),
+        "sin": (0.1, 64, 0.1),
+        "cos": (0.1, 64, 0.1),
         "erf":  (-64, 64, 0.1),
-        "exp": (0.001, 10, 0.001),
-        "gelu":  (1.0, 64, 0.1),
+        "exp": (-64, 0, 0.1),
+        "gelu":  (-64, 64, 0.1),
         "log":  (1.0, 64, 0.1),
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=0.1) both world have smaller average errors. Range: 1, 64. Size: 8 bits
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=1) both world have smaller average errors. Range: 1, 64. Size: 7 bits
         "reciprocal": (1.0, 64, 0.1),
-        # Haar performs better for sigmoid in practice
         "sigmoid":  (-64, 64, 0.1), 
-        "silu":  (1.0, 64, 0.1),
-        # Haar performs better for tanh in practicer
-        "tanh":  (1.0, 64, 0.1),
-        "sqrt":  (1.0, 64, 0.1),
-        "inv_sqrt":  (1.0, 64, 0.1),
+        "silu":  (-64, 64, 0.1),
+        "tanh":  (-64, 64, 0.1),
+        "sqrt":  (0.1, 64, 0.1),
+        "inv_sqrt":  (0.1, 64, 0.1),
     }
 
 
@@ -149,6 +147,16 @@ class FuncBenchmarks:
         return errors.sum()
 
     @staticmethod
+    def calc_avg_abs_error(ref, out):
+        """Computes total absolute error"""
+        ref, out = ref.cpu(), out.cpu()
+        if ref.dtype == torch.bool:
+            errors = (out != ref).numpy().sum()
+            return errors
+        errors = torch.abs(out - ref).numpy()
+        return errors.mean()
+
+    @staticmethod
     def calc_relative_error(ref, out):
         """Computes average relative error"""
         ref, out = ref.cpu(), out.cpu()
@@ -194,7 +202,7 @@ class FuncBenchmarks:
 
     def get_errors(self):
         """Computes the total error of approximations"""
-        abs_errors, relative_errors = [], []
+        abs_errors, avg_abs_errors, relative_errors = [], [], []
 
         for func in FuncBenchmarks.UNARY:
             ref, out_enc = self.call_function_on_domain(func)
@@ -203,16 +211,19 @@ class FuncBenchmarks:
             abs_error = FuncBenchmarks.calc_abs_error(ref, out)
             abs_errors.append(abs_error)
 
+            avg_abs_error = FuncBenchmarks.calc_avg_abs_error(ref, out)
+            avg_abs_errors.append(avg_abs_error)
+
             relative_error = FuncBenchmarks.calc_relative_error(ref, out)
             relative_errors.append(relative_error)
 
-        return abs_errors, relative_errors
+        return abs_errors, avg_abs_errors, relative_errors
 
     def run(self):
         """Runs and stores benchmarks in self.df"""
         _runtimes, runtimes_enc = self.get_runtimes()
 
-        abs_errors, relative_errors = self.get_errors()
+        abs_errors, avg_abs_errors, relative_errors = self.get_errors()
 
         self.df = pd.DataFrame.from_dict(
             {
@@ -221,6 +232,7 @@ class FuncBenchmarks:
                 "runtime Q1": [r.q1 for r in runtimes_enc],
                 "runtime Q3": [r.q3 for r in runtimes_enc],
                 "total abs err.": abs_errors,
+                "avg abs err.": avg_abs_errors,
                 "avg relative err.": relative_errors,
             }
         )
