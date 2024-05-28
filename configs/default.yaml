@@ -30,7 +30,7 @@ functions:
 
   # reciprocal configuration
   # reciprocal_method: "NR"
-  reciprocal_method: "bior"
+  reciprocal_method: "haar"
   reciprocal_nr_iters: 10
   reciprocal_log_iters: 1
   reciprocal_all_pos: True
