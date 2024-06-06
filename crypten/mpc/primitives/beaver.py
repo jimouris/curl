@@ -171,11 +171,11 @@ def evaluate_lut(x, lut):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
 
     Args:
-        x (torch.Tensor): Input tensor.
+        x (Cryptensor): Input tensor.
         lut (torch.Tensor): Look-Up Table tensor.
 
     Returns:
-        torch.Tensor: Result tensor after applying the LUT.
+        Cryptensor: Result tensor after applying the LUT.
     """
     provider = crypten.mpc.get_default_provider()
     size = lut.size()[0]
@@ -183,7 +183,7 @@ def evaluate_lut(x, lut):
     x = x.flatten()
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
@@ -206,13 +206,13 @@ def evaluate_bior_lut(x, luts, scale, bias):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
 
     Args:
-        x (torch.Tensor): Input tensor.
+        x (Cryptensor): Input tensor.
         luts (torch.Tensor): Look-Up Table tensors.
         scale (torch.Tensor): Scaling factor for the lookups.
         bias (int): Bias for the LUT.
 
     Returns:
-        torch.Tensor: Result tensor after applying the LUT.
+        Cryptensor: Result tensor after applying the LUT.
     """
     provider = crypten.mpc.get_default_provider()
     size = luts[0].size()[0]
@@ -220,7 +220,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
     x = x.flatten()
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
@@ -245,6 +245,39 @@ def evaluate_bior_lut(x, luts, scale, bias):
         lut = (lut1 - lut0) * scaling + 2**bias * lut0
         result = lut.div(int(2**(2*bias)))
         result = result.reshape(shape)
+    return result
+
+def evaluate_embed(x, embed):
+    """Evaluates an embedding using an input tensor x.
+
+    Args:
+        x (torch.Tensor): Input tensor.
+        embed (Cryptensor): Embedding tensor.
+
+    Returns:
+        Cryptensor: Result tensor after applying the LUT.
+    """
+    provider = crypten.mpc.get_default_provider()
+    size = embed.size()[0]
+    shape = x.size() + (embed.size()[1],)
+    x = x.flatten()
+
+    # Generate one-hot vectors for each element of x
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
+
+    # Reveal the shift amounts
+    with IgnoreEncodings([x, r]):
+        z = (x - r) % size
+        shift_amount = z.reveal() % size
+
+    if shift_amount.size():
+        indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
+        one_hot_r = one_hot_r.gather(1, indices)
+        lookup = one_hot_r.matmul(embed)
+    else:
+        one_hot_r = one_hot_r.roll(int(shift_amount))
+        lookup = one_hot_r.matmul(embed)
+    result = lookup.reshape(shape)
     return result
 
 def AND(x, y):

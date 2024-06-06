@@ -629,7 +629,7 @@ class AutogradErf(AutogradFunction):
 
 
 @register_function("gelu")
-class AutogradGelu(AutogradFunction):
+class AutogradGELU(AutogradFunction):
     @staticmethod
     def forward(ctx, input):
         ctx.save_for_backward(input)
@@ -1410,7 +1410,7 @@ class AutogradSigmoid(AutogradFunction):
 
 
 @register_function("silu")
-class AutogradSilu(AutogradFunction):
+class AutogradSILU(AutogradFunction):
     @staticmethod
     def forward(ctx, input):
         silu = input.silu()
@@ -1477,6 +1477,21 @@ class AutogradPad(AutogradFunction):
             end = grad_output.size(dim) - padding[idx + 1] - padding[idx]
             grad_output = grad_output.narrow(dim, start, end)
         return grad_output
+
+
+@register_function("attention")
+class AutogradAttention(AutogradFunction):
+    @staticmethod
+    def forward(ctx, query, key, value, mask):
+        search = query.matmul(key) / torch.sqrt(query.shape[-1]) + mask
+        retrival = search.softmax(1).matmul(value)
+        ctx.save_multiple_for_backward([search, retrival])
+        return retrival
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # TODO
+        pass
 
 
 @register_function("avg_pool2d")
@@ -1936,6 +1951,86 @@ class AutogradBatchNorm(AutogradFunction):
 
         # return gradients:
         return (grad_input, grad_weight, grad_bias)
+
+
+@register_function("layernorm")
+class AutogradLayerNorm(AutogradFunction):
+    @staticmethod
+    def forward(
+        ctx,
+        x,
+        weight,
+        bias,
+        training=False,
+        eps=1e-05,
+        inv_var=None,
+    ):
+        """
+        Computes forward step of layer norm by normalizing x
+            and returning weight * x_norm + bias.
+
+        Note: inv_var can introduce precision errors due to sqrt and division
+            particularly when the number of samples in a batch is small.
+
+        Args:
+            ctx (autograd_cyptensor.AutogradContext): context which
+                stores parameters such as weight and bias for backward step.
+            input (tuple of torch.tensors or cryptensor):
+                containing (x, weight, bias) with shapes `(N, C, +)`, `C`, and `C`
+                in turn.
+            training (bool):
+            eps (float): specifies epsilon used for numerical precision in inv_var
+
+        Returns: (weight * normalized input + bias) of shape `(N, C, +)`.
+        """
+
+        # compute mean and variance, track batch statistics:
+        mean = x.mean(-1, keepdims=True)
+        variance = x.var(-1, keepdims=True)
+
+        if training or inv_var is None:
+            # compute inverse variance:
+            if torch.is_tensor(variance):
+                inv_var = 1.0 / torch.sqrt(variance + eps)
+            else:
+                inv_var = (variance + eps).inv_sqrt()
+
+        # reshape shape (C) to broadcastable (1, C, 1, +):
+        # mean = mean.reshape(broadcast_shape)
+        inv_var = inv_var.reshape(mean.shape)
+        # weight = weight.reshape(broadcast_shape)
+        # bias = bias.reshape(broadcast_shape)
+
+        # compute z-scores:
+        x_norm = (x - mean) * inv_var
+
+        # save context and return:
+        ctx.save_multiple_for_backward((x_norm, weight, inv_var, training))
+        return x_norm * weight + bias
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # TODO
+        """
+        Computes the gradient with respect to x, weight, and bias.
+
+        Statistics are assumed to be computed along dimension C
+        for an input of shape (N, C, ...). Note, partials with respect to
+        the input treat mean and variance as constants similar to torch.
+
+        Args:
+            ctx (autograd_cyptensor.AutogradContext): context containing
+                x_norm, weight, and inv_var. Note weight
+                and inv_var must be broadcastable with grad_output.
+            grad_output (cryptensor): batchnorm output of shape (N, C, +).
+
+        Returns:
+            x_grad (cryptensor): gradient with respect to x with shape (N, C, +).
+            weight_grad (cryptensor): gradient with respect to the weight of
+                with shape (C).
+            bias_grad (cryptensor): gradient with respect to bias of shape (C).
+        """
+        pass
 
 
 @register_function("binary_cross_entropy")

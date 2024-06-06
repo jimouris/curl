@@ -508,7 +508,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
     def __div__(self, tensor):
         """Element-wise divide by a tensor."""
         return self.div(tensor)
-    
+
     def __mod__(self, tensor):
         """Element-wise modulo by a tensor."""
         return self.mod(tensor)

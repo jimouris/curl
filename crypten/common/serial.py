@@ -46,6 +46,7 @@ class RestrictedUnpickler(pickle.Unpickler):
     __ALLOWLIST = [
         "builtins.set",
         "collections.OrderedDict",
+        "torch.nn.modules.activation.GELU",
         "torch.nn.modules.activation.LogSigmoid",
         "torch.nn.modules.activation.LogSoftmax",
         "torch.nn.modules.activation.ReLU",
@@ -67,6 +68,7 @@ class RestrictedUnpickler(pickle.Unpickler):
         "torch.nn.modules.loss.CrossEntropyLoss",
         "torch.nn.modules.loss.L1Loss",
         "torch.nn.modules.loss.MSELoss",
+        "torch.nn.modules.normalization.LayerNorm",
         "torch.nn.modules.pooling.AvgPool2d",
         "torch.nn.modules.pooling.MaxPool2d",
         "torch._utils._rebuild_parameter",

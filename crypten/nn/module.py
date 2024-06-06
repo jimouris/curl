@@ -10,6 +10,7 @@ import warnings
 from collections import OrderedDict
 
 import crypten
+import math
 import torch
 import torch.onnx.symbolic_helper as sym_help
 from crypten.common.functions.pooling import _adaptive_pool2d_helper
@@ -960,6 +961,18 @@ class Parameter(Module):
         return self.data.requires_grad
 
 
+class Identity(Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input):
+        return input
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Identity()
+
+
 class Constant(Module):
     """
     Module that holds a constant tensor. If `trainable` is set to `False`, the
@@ -1145,19 +1158,6 @@ class Erf(Module):
     @staticmethod
     def from_onnx(attributes=None):
         return Erf()
-
-
-class Gelu(Module):
-    """
-    Module that calculates the gelu of the given input tensor, element-wise.
-    """
-
-    def forward(self, input):
-        return input.gelu()
-
-    @staticmethod
-    def from_onnx(attributes=None):
-        return Gelu()
 
 
 class _Reduce(Module):
@@ -1965,6 +1965,51 @@ class MatMul(Module):
         return MatMul()
 
 
+class Attention(Module):
+    def __init__(self, embed_dim, num_heads):
+        super(Attention, self).__init__()
+
+        assert embed_dim % num_heads == 0, "invalid heads and embedding dimension"
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.search_dim = embed_dim // num_heads
+
+        self.key = Linear(embed_dim, embed_dim)
+        self.value = Linear(embed_dim, embed_dim)
+        self.query = Linear(embed_dim, embed_dim)
+        self.proj = Linear(embed_dim, embed_dim)
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        seq_len = x.shape[1]
+
+        k_t = self.key(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
+        v = self.value(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+        q = self.query(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+
+        attn = q.matmul(k_t) / math.sqrt(q.size(-1))
+        attn = attn.softmax(dim=-1)
+
+        y = attn.matmul(v).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
+        return y
+
+
+class Embedding(Module):
+    def __init__(self, vocab_size, embed_dim):
+        super(Embedding, self).__init__()
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+
+        # initialize model parameters:
+        pytorch_module = torch.nn.Embedding(vocab_size, embed_dim)
+        self.register_parameter("weight", pytorch_module.weight)
+
+    def forward(self, x):
+        output = x.evaluate_embed(self.weight)
+        return output
+
+
 class Conv(Module):
     """
     Module that performs convolution, following the ONNX specification of that
@@ -2335,6 +2380,46 @@ class ReLU(Module):
         return ReLU()
 
 
+class GELU(Module):
+    r"""
+    Module that calculates the gelu of the given input tensor, element-wise.
+
+    :math:`\text{GeLU}(x)= \frac{x}{2}\cdot(1 + \erf(\frac{x}{\sqrt(2)}))`
+    """
+
+    def __init__(self, inplace=False):
+        super().__init__()
+        if inplace:
+            logging.warning("CrypTen GeLU module does not support inplace computation.")
+
+    def forward(self, input):
+        return input.gelu()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return GELU()
+
+
+class SILU(Module):
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{SiLU}(x) = \silu(x) = \frac{x}{1 + \exp(-x)}
+    """
+
+    def __init__(self, inplace=False):
+        super().__init__()
+        if inplace:
+            logging.warning("CrypTen SiLU module does not support inplace computation.")
+
+    def forward(self, x):
+        return x.silu()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return SiLU()
+
+
 class Hardtanh(Module):
     r"""Applies the Hardtanh function element-wise
 
@@ -2440,21 +2525,6 @@ class Sigmoid(Module):
     @staticmethod
     def from_onnx(attributes=None):
         return Sigmoid()
-
-
-class Silu(Module):
-    r"""Applies the element-wise function:
-
-    .. math::
-        \text{Silu}(x) = \silu(x) = \frac{x}{1 + \exp(-x)}
-    """
-
-    def forward(self, x):
-        return x.silu()
-
-    @staticmethod
-    def from_onnx(attributes=None):
-        return Silu()
 
 
 class Softmax(Module):
@@ -2809,6 +2879,70 @@ class GlobalAveragePool(Module):
     @staticmethod
     def from_onnx(attributes=None):
         return GlobalAveragePool()
+
+
+class LayerNormalization(Module):
+    """
+    Module that performs layer normalization following the ONNX specification.
+
+    This module is stateless. It takes `input`, `weight`, `bias`, and tensors as
+    input into `forward()`.
+    """
+
+    def __init__(self, eps=1e-05):
+        super().__init__()
+        self.eps = eps
+        self.inv_var = None
+
+    def forward(self, x):
+        assert len(x) == 3, f"LayerNormalization expects 3 inputs, not {len(x)}"
+        input, weight, bias = x
+
+        # perform batch normalization:
+        output = input.layernorm(
+            weight,
+            bias,
+            training=self.training,
+            eps=self.eps,
+            inv_var=None,
+        )
+        if self.training:  # NOTE: Training graph is different from evaluation graph.
+            return output, None, None
+        else:
+            return output
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        if attributes is None:
+            attributes = {}
+        return LayerNormalization(
+            eps=attributes.get("epsilon", 1e-05),
+        )
+
+class LayerNorm(Module):
+    def __init__(self, shape, eps=1e-05):
+        super().__init__()
+
+        # initialize model parameters and buffers:
+        pytorch_module = torch.nn.LayerNorm(shape, eps)
+        for param in ["weight", "bias"]:
+            logging.info(f"{param}={getattr(pytorch_module, param)}")
+            self.register_parameter(param, getattr(pytorch_module, param))
+
+        # set model attributes:
+        self.eps = eps
+
+        # do not precompute inverse variance during training
+        self.inv_var = None
+
+    def forward(self, input):
+        return input.layernorm(
+            self.weight,
+            self.bias,
+            training=self.training,
+            eps=self.eps,
+            inv_var=self.inv_var,
+        )
 
 
 class BatchNormalization(Module):

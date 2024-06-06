@@ -316,6 +316,12 @@ class MPCTensor(CrypTensor):
         result._tensor.evaluate_bior_lut(lut, scale, bias)
         return result
 
+    def evaluate_embed(self, embed):
+        r"""Evaluate a embedding on the input tensor."""
+        result = self.clone()
+        result._tensor.evaluate_embed(embed)
+        return result
+
 UNARY_FUNCTIONS = [
     "avg_pool2d",
     "square",

@@ -632,6 +632,12 @@ class ArithmeticSharedTensor:
         self.share = protocol.evaluate_bior_lut(self, luts, scale._tensor, bias).share
         return self
 
+    def evaluate_embed(self, embed):
+        """Evaluate a embedding on the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        self.share = protocol.evaluate_embed(self, embed.share).share
+        return self
+
     def where(self, condition, y):
         """Selects elements from self or y based on condition
 
