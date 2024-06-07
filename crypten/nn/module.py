@@ -2926,7 +2926,6 @@ class LayerNorm(Module):
         # initialize model parameters and buffers:
         pytorch_module = torch.nn.LayerNorm(shape, eps)
         for param in ["weight", "bias"]:
-            logging.info(f"{param}={getattr(pytorch_module, param)}")
             self.register_parameter(param, getattr(pytorch_module, param))
 
         # set model attributes:
