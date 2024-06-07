@@ -49,10 +49,10 @@ class GPT(nn.Module):
         return x
 
 class GPT2(GPT):
-    def __init__(self, full=True):
-        super(GPT2, self).__init__(embed_dim=768, num_heads=12, num_blocks=12, vocab_size=50257, seq_len=128, full=full)
+    def __init__(self, seq_len, full=True):
+        super(GPT2, self).__init__(embed_dim=768, num_heads=12, num_blocks=12, vocab_size=50257, seq_len=seq_len, full=full)
 
 class GPTNeo(GPT):
-    def __init__(self, full=True):
-        super(GPTNeo, self).__init__(embed_dim=2048, num_heads=16, num_blocks=24, vocab_size=50257, seq_len=128, full=full)
+    def __init__(self, seq_len, full=True):
+        super(GPTNeo, self).__init__(embed_dim=2048, num_heads=16, num_blocks=24, vocab_size=50257, seq_len=seq_len, full=full)
 

@@ -49,13 +49,13 @@ class Bert(nn.Module):
         return x
 
 class BertTiny(Bert):
-    def __init__(self, full=True):
-        super(BertTiny, self).__init__(embed_dim=128, num_heads=2, num_blocks=2, vocab_size=30522, seq_len=128, full=full)
+    def __init__(self, seq_len, full=True):
+        super(BertTiny, self).__init__(embed_dim=128, num_heads=2, num_blocks=2, vocab_size=30522, seq_len=seq_len, full=full)
 
 class BertBase(Bert):
-    def __init__(self, full=True):
-        super(BertBase, self).__init__(embed_dim=768, num_heads=12, num_blocks=12, vocab_size=30522, seq_len=128, full=full)
+    def __init__(self, seq_len, full=True):
+        super(BertBase, self).__init__(embed_dim=768, num_heads=12, num_blocks=12, vocab_size=30522, seq_len=seq_len, full=full)
 
 class BertLarge(Bert):
-    def __init__(self, full=True):
-        super(BertLarge, self).__init__(embed_dim=1024, num_heads=16, num_blocks=24, vocab_size=30522, seq_len=128, full=full)
+    def __init__(self, seq_len, full=True):
+        super(BertLarge, self).__init__(embed_dim=1024, num_heads=16, num_blocks=24, vocab_size=30522, seq_len=seq_len, full=full)

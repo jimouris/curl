@@ -72,10 +72,11 @@ class LLMs:
         self.full = full
         model = model.lower()
 
+        seq_len = 64
         if model is None or model == 'all':
-            self.models = [m(full=full).encrypt(src=0) for m in all_models.values()]
+            self.models = [m(seq_len=seq_len, full=full).encrypt(src=0) for m in all_models.values()]
         elif model in all_models:
-            self.models = [all_models[model](full=full).encrypt(src=0)]
+            self.models = [all_models[model](seq_len=seq_len, full=full).encrypt(src=0)]
         else:
             raise ValueError(f"Invalid model name: {model}. Choose from: {', '.join(all_models.keys())}")
 
