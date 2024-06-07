@@ -6,7 +6,6 @@ class Bert(nn.Module):
     class Block(nn.Module):
         def __init__(self, embed_dim, num_heads):
             super(Bert.Block, self).__init__()
-            embed_dim = embed_dim
             self.ln1 = nn.LayerNorm(embed_dim)
             self.ln2 = nn.LayerNorm(embed_dim)
             self.attn = nn.Attention(embed_dim, num_heads)
@@ -24,6 +23,8 @@ class Bert(nn.Module):
     def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len, full=True):
         super(Bert, self).__init__()
         self.full = full
+        self.embed_dim = embed_dim
+
         if full:
             self.tok_embed = nn.Embedding(vocab_size, embed_dim)
             self.pos_embed = crypten.cryptensor(torch.zeros(1, seq_len, embed_dim))

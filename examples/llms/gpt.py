@@ -6,7 +6,6 @@ class GPT(nn.Module):
     class Block(nn.Module):
         def __init__(self, embed_dim, num_heads):
             super(GPT.Block, self).__init__()
-            embed_dim = embed_dim
             self.ln1 = nn.LayerNorm(embed_dim)
             self.ln2 = nn.LayerNorm(embed_dim)
             self.attn = nn.Attention(embed_dim, num_heads)
@@ -24,6 +23,8 @@ class GPT(nn.Module):
     def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len, full=True):
         super(GPT, self).__init__()
         self.full = full
+        self.embed_dim = embed_dim
+
         if full:
             self.tok_embed = nn.Embedding(vocab_size, embed_dim)
             self.pos_embed = crypten.cryptensor(torch.zeros(1, seq_len, embed_dim))
@@ -56,3 +57,6 @@ class GPTNeo(GPT):
     def __init__(self, seq_len, full=True):
         super(GPTNeo, self).__init__(embed_dim=2048, num_heads=16, num_blocks=24, vocab_size=50257, seq_len=seq_len, full=full)
 
+class GPTNeoLarge(GPT):
+    def __init__(self, seq_len, full=True):
+        super(GPTNeoLarge, self).__init__(embed_dim=2560, num_heads=20, num_blocks=32, vocab_size=50257, seq_len=seq_len, full=full)

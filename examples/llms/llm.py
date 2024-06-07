@@ -71,12 +71,10 @@ class LLMs:
         self.df = None
         self.full = full
         model = model.lower()
-
-        seq_len = 64
         if model is None or model == 'all':
-            self.models = [m(seq_len=seq_len, full=full).encrypt(src=0) for m in all_models.values()]
+            self.models = [m(seq_len=tensor_size[1], full=full).encrypt(src=0) for m in all_models.values()]
         elif model in all_models:
-            self.models = [all_models[model](seq_len=seq_len, full=full).encrypt(src=0)]
+            self.models = [all_models[model](seq_len=tensor_size[1], full=full).encrypt(src=0)]
         else:
             raise ValueError(f"Invalid model name: {model}. Choose from: {', '.join(all_models.keys())}")
 
@@ -93,17 +91,14 @@ class LLMs:
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
 
-        if self.full:
-            x = torch.rand(self.tensor_size, device=self.device)
-        else:
-            embedding_size = 1024
-            x = torch.rand(self.tensor_size * embedding_size, device=self.device).reshape(1, 64, embedding_size)
-
-        x_enc = crypten.cryptensor(x)
-
         runtimes, runtimes_enc = [], []
-
         for llm in self.models:
+            if self.full:
+                x = torch.rand(self.tensor_size, device=self.device)
+            else:
+                x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
+            x_enc = crypten.cryptensor(x)
+
             llm.eval()
 
             # runtime, _ = LLMs.time_llm(x, llm)

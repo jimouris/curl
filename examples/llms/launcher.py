@@ -68,10 +68,10 @@ def get_args():
         help="Populate the cache and run with it",
     )
     parser.add_argument(
-        "--full",
-        default=True,
+        "--not_full",
+        default=False,
         action="store_true",
-        help="Run the full model including embeddings and softmax",
+        help="Skip embeddings and softmax",
     )
     models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'all']
     parser.add_argument(
@@ -100,7 +100,7 @@ def _run_experiment(args):
     else:
         logging.info("Using LUTs Config:")
 
-    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.verbose)
+    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.verbose, not args.not_full)
 
     print('Done')
 
