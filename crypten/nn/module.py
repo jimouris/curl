@@ -1975,23 +1975,23 @@ class Attention(Module):
         self.num_heads = num_heads
         self.search_dim = embed_dim // num_heads
 
-        self.key = Linear(embed_dim, embed_dim)
-        self.value = Linear(embed_dim, embed_dim)
-        self.query = Linear(embed_dim, embed_dim)
+        self.search = Linear(embed_dim, 3 * embed_dim)
         self.proj = Linear(embed_dim, embed_dim)
 
     def forward(self, x):
         batch_size = x.shape[0]
         seq_len = x.shape[1]
 
-        k_t = self.key(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
-        v = self.value(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
-        q = self.query(x).reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+        query, key, value = self.search(x).split(self.embed_dim, dim=2)
+        query = query.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+        key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
+        value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
 
-        attn = q.matmul(k_t) / math.sqrt(q.size(-1))
+        attn = query.matmul(key) / math.sqrt(query.size(-1))
         attn = attn.softmax(dim=-1)
 
-        y = attn.matmul(v).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
+        y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
+        y = self.proj(y)
         return y
 
 
@@ -2417,7 +2417,7 @@ class SILU(Module):
 
     @staticmethod
     def from_onnx(attributes=None):
-        return SiLU()
+        return SILU()
 
 
 class Hardtanh(Module):
