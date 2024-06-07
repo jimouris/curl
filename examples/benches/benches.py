@@ -14,6 +14,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 from crypten.config import cfg
+import crypten.communicator as comm
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -80,7 +81,7 @@ class FuncBenchmarks:
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=0.1) both world have smaller average errors. Range: 1, 64. Size: 8 bits
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=1) both world have smaller average errors. Range: 1, 64. Size: 7 bits
         "reciprocal": (1.0, 64, 0.1),
-        "sigmoid":  (-64, 64, 0.1), 
+        "sigmoid":  (-64, 64, 0.1),
         "silu":  (-64, 64, 0.1),
         "tanh":  (-64, 64, 0.1),
         "sqrt":  (0.1, 64, 0.1),
@@ -231,16 +232,20 @@ class FuncBenchmarks:
             }
         )
 
-def run_benches(cfg_file, tensor_size, party_name):
+def run_benches(cfg_file, tensor_size, party_name, with_cache=False, verbose=False):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
     crypten.init(cfg_file, party_name=party_name)
+    if verbose:
+        comm.get().set_verbosity(True)
+
     functions_data = cfg.config.get('functions', {})
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
     logging.info("\t'{}'".format(filtered_data))
-    crypten.trace()
+    if with_cache:
+        crypten.trace()
 
     logging.info(f"="*22 + " Without Cache " + "="*22)
 
@@ -249,15 +254,24 @@ def run_benches(cfg_file, tensor_size, party_name):
     logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
-    # Populate the cache.
-    crypten.fill_cache()
-    provider = crypten.mpc.get_default_provider()
-    provider.save_cache()
-    provider.load_cache()
-    crypten.trace(False)
+    if verbose:
+        comm.get().print_communication_stats()
 
-    # Run with the cache.
-    logging.info(f"="*24 + " With Cache " + "="*24)
-    benches = FuncBenchmarks(tensor_size, device=device)
-    benches.run()
-    logging.info("'\n{}\n'".format(benches))
+    if with_cache:
+        if verbose:
+            comm.get().reset_communication_stats()
+
+        # Populate the cache.
+        crypten.fill_cache()
+        provider = crypten.mpc.get_default_provider()
+        provider.save_cache()
+        provider.load_cache()
+        crypten.trace(False)
+
+        # Run with the cache.
+        logging.info(f"="*24 + " With Cache " + "="*24)
+        benches = FuncBenchmarks(tensor_size, device=device)
+        benches.run()
+        logging.info("'\n{}\n'".format(benches))
+        if verbose:
+            comm.get().print_communication_stats()

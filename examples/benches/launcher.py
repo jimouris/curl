@@ -55,6 +55,18 @@ def get_args():
         type=str,
         help="The name of the party",
     )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="Print communication statistics",
+    )
+    parser.add_argument(
+        "--with_cache",
+        default=False,
+        action="store_true",
+        help="Populate the cache and run with it",
+    )
     args = parser.parse_args()
     return args
 
@@ -75,7 +87,7 @@ def _run_experiment(args):
     else:
         logging.info("Using LUTs Config:")
 
-    run_benches(cfg_file, args.tensor_size, args.party_name)
+    run_benches(cfg_file, args.tensor_size, args.party_name, args.with_cache, args.verbose)
 
     print('Done')
 
