@@ -19,7 +19,7 @@ from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 from .provider import TupleProvider
 
 
-TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_hot"]
+TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_hot", "egk_trunc_pr_rng"]
 
 
 class TrustedThirdParty(TupleProvider):
@@ -132,6 +132,36 @@ class TrustedThirdParty(TupleProvider):
         r = ArithmeticSharedTensor.from_shares(r, precision=0)
         one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r.t(), precision=0)
         return r, one_hot_r
+
+
+    def egk_trunc_pr_rng(self, size, l, m, device=None):
+        """Generate random values for the [EGK+20] probabilistic truncation protocol."""
+        generator = TTPClient.get().get_generator(device=device)
+
+        _ = generate_random_ring_element(size, generator=generator, device=device)
+        if comm.get().get_rank() == 0:
+            r = TTPClient.get().ttp_request("egk_trunc_pr_rng", device, size, l-m)
+        else:
+            r = generate_random_ring_element(size, generator=generator, device=device)
+
+        _ = generate_random_ring_element(size, generator=generator, device=device)
+        if comm.get().get_rank() == 0:
+            r_p = TTPClient.get().ttp_request("egk_trunc_pr_rng", device, size, m)
+        else:
+            r_p = generate_random_ring_element(size, generator=generator, device=device)
+        
+        _ = generate_random_ring_element(size, generator=generator, device=device)
+        if comm.get().get_rank() == 0:
+            b = TTPClient.get().ttp_request("egk_trunc_pr_rng", device, size, 1)
+        else:
+            b = generate_random_ring_element(size, generator=generator, device=device)
+
+        r = ArithmeticSharedTensor.from_shares(r, precision=0)
+        r_p = ArithmeticSharedTensor.from_shares(r_p, precision=0)
+        b = ArithmeticSharedTensor.from_shares(b, precision=0)
+
+        return r, r_p, b
+
 
     @staticmethod
     def _init():
@@ -391,3 +421,14 @@ class TTPServer:
         one_hot_clear = torch.stack(one_hot_clear)
 
         return one_hot_clear - self._get_additive_PRSS(one_hot_clear.size(), remove_rank=True)
+    
+    def egk_trunc_pr_rng(self, size, exp):
+
+        r = self._get_additive_PRSS(size) % 2**exp
+        # Subtract all other shares of `r` from plaintext value of `r` to get `r0`
+        # everyone else can use their generators to create their shares
+        r0 = r - self._get_additive_PRSS(size, remove_rank=True) 
+        return r0 # the shares of party 0
+    
+
+    

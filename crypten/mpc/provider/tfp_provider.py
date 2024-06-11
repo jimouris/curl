@@ -90,3 +90,23 @@ class TrustedFirstParty(TupleProvider):
         one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
         r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
         return r_shares, one_hot
+    
+    def egk_trunc_pr_rng(self, size, l, m, device=None):
+        """
+        Generate random shared tensors for the [EGK+20] probabilistic
+        truncation protocol.
+        """
+        
+        r = generate_kbit_random_tensor(size, l-m, device=device)
+        r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
+        r_p = generate_kbit_random_tensor(size, m, device=device)
+        r_p_shares = ArithmeticSharedTensor(r_p, precision=0, src=0)
+        b = generate_kbit_random_tensor(size, 1, device=device)
+        b_shares = ArithmeticSharedTensor(b, precision=0, src=0)
+
+        return r_shares, r_p_shares, b_shares 
+
+
+
+
+

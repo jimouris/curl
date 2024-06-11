@@ -303,6 +303,12 @@ class MPCTensor(CrypTensor):
             return result.mul(y.reciprocal())
         result._tensor.div_(y)
         return result
+    
+    def egk_trunc_pr(self, l, m):
+        r"""Truncate self by m bits using [EGK+20] protocol."""
+        result = self.clone()
+        result._tensor.egk_trunc_pr(l, m)
+        return result
 
     def evaluate_lut(self, lut):
         r"""Evaluate a look-up table (LUT) on the input tensor."""
@@ -311,7 +317,7 @@ class MPCTensor(CrypTensor):
         return result
 
     def evaluate_bior_lut(self, lut, scale, bias):
-        r"""Evaluate a look-up table (LUT) on the input tensor."""
+        r"""Evaluate a look-up table (LUT) on the input tensor using Bior with two passes (approach 2)."""
         result = self.clone()
         result._tensor.evaluate_bior_lut(lut, scale, bias)
         return result
@@ -331,6 +337,8 @@ UNARY_FUNCTIONS = [
 BINARY_FUNCTIONS = [
     "divmod",
     "mod",
+    "egk_trunc_pr",
+    "egk_truncmod_pr",
     "add",
     "sub",
     "mul",

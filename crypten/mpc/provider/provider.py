@@ -20,6 +20,7 @@ class TupleProvider:
         "wrap_rng",
         "B2A_rng",
         "generate_one_hot",
+        "egk_trunc_pr_rng"
     ]
 
     _DEFAULT_CACHE_PATH = os.path.normpath(os.path.join(__file__, "../tuple_cache/"))
@@ -184,4 +185,10 @@ class TupleProvider:
         given size."""
         raise NotImplementedError(
             "TupleProvider generate_one_hot not implemented."
+        )
+    
+    def egk_trunc_pr_rng(self, size, l, m, device=None):
+        """Generate random values for the [EGK+20] probabilistic truncation protocol."""
+        raise NotImplementedError(
+            "TupleProvider egk_trunc_pr_rng not implemented."
         )

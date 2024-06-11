@@ -34,3 +34,7 @@ class HomomorphicProvider(TupleProvider):
     def generate_one_hot(self, tensor_size, lut_size, device=None):
         """Generate lookup table vectors of given sizes"""
         raise NotImplementedError("HomomorphicProvider not implemented")
+    
+    def egk_trunc_pr_rng(self, size, l, m, device=None):
+        """Generate random values for the [EGK+20] probabilistic truncation protocol."""
+        raise NotImplementedError("HomomorphicProvider not implemented")

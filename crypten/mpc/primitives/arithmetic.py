@@ -390,12 +390,18 @@ class ArithmeticSharedTensor:
         if not additive_func:
             if public:  # scale by self.encoder.scale
                 if self.encoder.scale > 1:
-                    return result.div_(result.encoder.scale)
+                    if cfg.encoder.trunc_method.prod == "crypten":
+                        return result.div_(result.encoder.scale)
+                    else:
+                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
                 else:
                     result.encoder = self.encoder
             else:  # scale by larger of self.encoder.scale and y.encoder.scale
                 if self.encoder.scale > 1 and y.encoder.scale > 1:
-                    return result.div_(result.encoder.scale)
+                    if cfg.encoder.trunc_method.prod == "crypten":
+                        return result.div_(result.encoder.scale)
+                    else:
+                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
                 elif self.encoder.scale > 1:
                     result.encoder = self.encoder
                 else:
@@ -498,6 +504,19 @@ class ArithmeticSharedTensor:
         divisor = self.div(y)
         remainder = self - divisor * y
         return remainder
+
+    def egk_trunc_pr(self, l, m):
+        """Truncation of tensor by m bits using the [EGK+20] protocol."""
+        protocol = globals()[cfg.mpc.protocol]
+        input = self.shallow_copy()
+        input.share = protocol.egk_trunc_pr(input, l, m).share
+        return input
+    
+    def egk_truncmod_pr(self, l, m):
+        divisor = self.egk_trunc_pr(l, m)
+        with beaver.IgnoreEncodings([self, divisor]):
+            remainder = self - divisor * 2**m
+        return divisor, remainder
 
     def matmul(self, y):
         """Perform matrix multiplication using some tensor"""

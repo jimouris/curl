@@ -167,6 +167,48 @@ def truncate(x, y):
     x.share -= correction.share
     return x
 
+def egk_trunc_pr(a, l, m):
+    """
+    Evaluates probabilistic truncation with no correctness error using [EGK+20]
+    protocol.
+
+    Reference: "Improved Primitives for MPC over Mixed Arithmetic-Binary Circuits"
+    Figure: 10
+    Link: https://eprint.iacr.org/2020/338.pdf
+
+    Args:
+        a (torch.Tensor): Input tensor.
+        l (int): Max bit size of input tensor, i.e., 0 <= a < 2**l.
+        m (int): number of bits to truncate.
+
+    Returns:
+        torch.Tensor: Result tensor after applying the LUT.
+    """
+
+    provider = crypten.mpc.get_default_provider()
+    k = 64
+    two_to_l = torch.tensor(2**l, dtype=torch.int64) # to prevent overflow
+    tensor_size = a.size()
+
+    # Preprocessing   
+    r, r_p, b = provider.egk_trunc_pr_rng(tensor_size, l, m)
+    with IgnoreEncodings([a, b]):
+        # Step 1
+        a_p = a + 2**(l-1) # allowing negative numbers
+        rpp = 2**m * r + r_p
+        enc_c = 2**(k - l - 1) * (a_p + two_to_l * b + rpp)
+        c = enc_c.reveal()
+        c_p = c >> (k - l - 1)
+        # Step 2
+        c_pl = (c_p >> l) & 1 # c'_l, the l-th (last) bit of c'
+        v = b + c_pl - 2 * c_pl * b
+        # Step 3
+        y = ((c_p % two_to_l) // 2**m) - r + 2**(l-m) * v - 2**(l-m-1)
+    
+    return y
+
+
+
 def evaluate_lut(x, lut):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
 

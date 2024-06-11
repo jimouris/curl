@@ -122,6 +122,8 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         "conv2d",
         "copy_",
         "div_",
+        "egk_trunc_pr",
+        "egk_truncmod_pr",
         "divmod",
         "mod",
         "matmul",
@@ -571,6 +573,10 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
     def __nonzero__(self):
         """__bool__ for backwards compatibility with Python 2"""
         raise RuntimeError("Cannot evaluate CrypTensors to boolean values")
+    
+    def egk_trunc_pr(self, tensor, l, m):
+        self.egk_trunc_pr(tensor, l, m)
+        return self
 
     ##############################################################
     # All CrypTensor subclasses should implement the following:  #
