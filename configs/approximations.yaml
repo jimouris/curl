@@ -5,6 +5,11 @@ debug:
   validation_mode: False
 encoder:
   precision_bits: 16
+  trunc_method:
+    # prod: "crypten"
+    prod: "egk"
+    # lut: "crypten"
+    lut: "egk"
 functions:
   max_method: "log_reduction"
 
