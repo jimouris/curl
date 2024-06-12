@@ -76,6 +76,20 @@ def get_args():
     args = parser.parse_args()
     return args
 
+
+def get_config(args):
+    cfg_file = crypten.cfg.get_default_config_path()
+    if args.approximations:
+        logging.info("Using Approximation Config:")
+        cfg_file = cfg_file.replace("default", "approximations")
+    elif args.lut_only:
+        logging.info("Using LUT-only Config:")
+        cfg_file = cfg_file.replace("default", "lut_only")
+    else:
+        logging.info("Using LUTs Config:")
+    return cfg_file
+
+
 def _run_experiment(args):
     # only import here to initialize crypten within the subprocesses
     from examples.benches.benches import run_benches
@@ -86,16 +100,7 @@ def _run_experiment(args):
         level = logging.CRITICAL
     logging.getLogger().setLevel(level)
 
-    cfg_file = crypten.cfg.get_default_config_path()
-    if args.approximations:
-        logging.info("Using Approximation Config:")
-        cfg_file = cfg_file.replace("default", "approximations")
-    elif args.lut_only:
-        logging.info("Using LUT-only Config:")
-        cfg_file = cfg_file.replace("default", "lut_only")
-    else:
-        logging.info("Using LUTs Config:")
-
+    cfg_file = get_config(args)
     run_benches(cfg_file, args.tensor_size, args.party_name, args.with_cache, args.verbose)
 
     print('Done')
@@ -104,7 +109,8 @@ def main(run_experiment):
     args = get_args()
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, run_experiment, args)
+        cfg_file = get_config(args)
+        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()

@@ -89,6 +89,18 @@ def get_args():
     args = parser.parse_args()
     return args
 
+def get_config(args):
+    cfg_file = crypten.cfg.get_default_config_path()
+    if args.approximations:
+        logging.info("Using Approximation Config:")
+        cfg_file = cfg_file.replace("default", "approximations")
+    elif args.no_cmp:
+        logging.info("Using config with LUTs without comparisons:")
+        cfg_file = cfg_file.replace("default", "llm_config")
+    else:
+        logging.info("Using LUTs Config:")
+    return cfg_file
+
 def _run_experiment(args):
     # only import here to initialize crypten within the subprocesses
     from examples.llms.llm import run_llm
@@ -99,16 +111,7 @@ def _run_experiment(args):
         level = logging.CRITICAL
     logging.getLogger().setLevel(level)
 
-    cfg_file = crypten.cfg.get_default_config_path()
-    if args.approximations:
-        logging.info("Using Approximation Config:")
-        cfg_file = cfg_file.replace("default", "approximations")
-    elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons:")
-        cfg_file = cfg_file.replace("default", "llm_config")
-    else:
-        logging.info("Using LUTs Config:")
-
+    cfg_file = get_config(args)
     run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.verbose, not args.not_full)
 
     print('Done')
@@ -117,7 +120,8 @@ def main(run_experiment):
     args = get_args()
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, run_experiment, args)
+        cfg_file = get_config(args)
+        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()

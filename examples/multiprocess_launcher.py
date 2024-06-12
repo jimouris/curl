@@ -16,7 +16,7 @@ import crypten
 class MultiProcessLauncher:
 
     # run_process_fn will be run in subprocesses.
-    def __init__(self, world_size, run_process_fn, fn_args=None):
+    def __init__(self, world_size, run_process_fn, fn_args=None, cfg_file=None):
         env = os.environ.copy()
         env["WORLD_SIZE"] = str(world_size)
         multiprocessing.set_start_method("spawn")
@@ -31,7 +31,7 @@ class MultiProcessLauncher:
             process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name=process_name,
-                args=(rank, world_size, env, run_process_fn, fn_args),
+                args=(rank, world_size, env, run_process_fn, fn_args, cfg_file),
             )
             self.processes.append(process)
 
@@ -45,18 +45,19 @@ class MultiProcessLauncher:
                     env,
                     crypten.mpc.provider.TTPServer,
                     None,
+                    cfg_file,
                 ),
             )
             self.processes.append(ttp_process)
 
     @classmethod
-    def _run_process(cls, rank, world_size, env, run_process_fn, fn_args):
+    def _run_process(cls, rank, world_size, env, run_process_fn, fn_args, cfg_file=None):
         for env_key, env_value in env.items():
             os.environ[env_key] = env_value
         os.environ["RANK"] = str(rank)
         orig_logging_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.INFO)
-        crypten.init()
+        crypten.init(cfg_file)
         logging.getLogger().setLevel(orig_logging_level)
         if fn_args is None:
             run_process_fn()
