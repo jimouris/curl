@@ -65,18 +65,18 @@ functions:
   # sigmoid_tanh_method: "bior-lut-only"
   sigmoid_tanh_method: "bior"
   sigmoid_tanh_terms: 32
-  sigmoid_tanh_haar_size_bits: 6
-  sigmoid_tanh_bior_size_bits: 6
-  sigmoid_lut_max_bits: 4 # [-16, 16]
-  tanh_lut_max_bits: 3 # [-8, 8]
+  sigmoid_tanh_haar_size_bits: 8
+  sigmoid_tanh_bior_size_bits: 8
+  sigmoid_lut_max_bits: 6 
+  tanh_lut_max_bits: 5
 
   # trigonometry configuration
   # trigonometry_method: "NR"
   # trigonometry_method: "bior-lut-only"
   trigonometry_method: "bior"
-  trigonometry_haar_size_bits: 5
-  trigonometry_bior_size_bits: 5
-  trigonometry_lut_max_bits: 6
+  trigonometry_haar_size_bits: 8
+  trigonometry_bior_size_bits: 8
+  trigonometry_lut_max_bits: 5
   trig_iterations: 10
 
   # error function configuration:
@@ -84,25 +84,25 @@ functions:
   # erf_method: "bior-lut-only"
   erf_method: "bior"
   erf_iterations: 8
-  erf_haar_size_bits: 5
-  erf_bior_size_bits: 5
-  erf_lut_max_bits: 2 # [-4, 4]
+  erf_haar_size_bits: 8
+  erf_bior_size_bits: 8
+  erf_lut_max_bits: 5
 
   # gelu configuration:
   # gelu_method: "erf"
-  gelu_method: "bior"
-  # gelu_method: "bior-lut-only"
+  # gelu_method: "bior"
+  gelu_method: "bior-lut-only"
   gelu_haar_size_bits: 4
   gelu_bior_size_bits: 4
   gelu_lut_max_bits: 2
 
   # silu configuration:
   # silu_method: "sigmoid"
-  # silu_method: "bior-lut-only"
-  silu_method: "bior"
+  silu_method: "bior-lut-only"
+  # silu_method: "bior"
   silu_haar_size_bits: 4
   silu_bior_size_bits: 4
-  silu_lut_max_bits: 4 # [-16, 16]
+  silu_lut_max_bits: 4
 mpc:
   active_security: False
   provider: "TFP"
@@ -112,4 +112,3 @@ nn:
     protocol: "layer_estimation"
     skip_loss_forward: True
     cache_pred_size: True
-
