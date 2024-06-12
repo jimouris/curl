@@ -67,7 +67,7 @@ functions:
   sigmoid_tanh_terms: 32
   sigmoid_tanh_haar_size_bits: 8
   sigmoid_tanh_bior_size_bits: 8
-  sigmoid_lut_max_bits: 6 
+  sigmoid_lut_max_bits: 6
   tanh_lut_max_bits: 5
 
   # trigonometry configuration

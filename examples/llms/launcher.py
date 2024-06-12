@@ -50,6 +50,12 @@ def get_args():
         help="Use approximations for non-linear functions",
     )
     parser.add_argument(
+        "--no_cmp",
+        default=False,
+        action="store_true",
+        help="Use LUTs for bounded functions without comparisons",
+    )
+    parser.add_argument(
         "--party_name",
         default=None,
         type=str,
@@ -97,6 +103,9 @@ def _run_experiment(args):
     if args.approximations:
         logging.info("Using Approximation Config:")
         cfg_file = cfg_file.replace("default", "approximations")
+    elif args.no_cmp:
+        logging.info("Using config with LUTs without comparisons:")
+        cfg_file = cfg_file.replace("default", "llm_config")
     else:
         logging.info("Using LUTs Config:")
 
