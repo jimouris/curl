@@ -72,18 +72,18 @@ class FuncBenchmarks:
 
     # (start, end, step))
     DOMAINS = {
-        "sin": (0.1, 64, 0.1),
-        "cos": (0.1, 64, 0.1),
-        "erf":  (-64, 64, 0.1),
+        "sin": (-31, 31, 0.1),
+        "cos": (-31, 31, 0.1),
+        "erf":  (-31, 31, 0.1),
         "exp": (-64, 0, 0.1),
-        "gelu":  (-64, 64, 0.1),
+        "gelu":  (-31, 31, 0.1),
         "log":  (1.0, 64, 0.1),
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=0.1) both world have smaller average errors. Range: 1, 64. Size: 8 bits
         # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=1) both world have smaller average errors. Range: 1, 64. Size: 7 bits
-        "reciprocal": (1.0, 64, 0.1),
-        "sigmoid":  (-64, 64, 0.1),
-        "silu":  (-64, 64, 0.1),
-        "tanh":  (-64, 64, 0.1),
+        "reciprocal": (1.0, 63.9, 0.1),
+        "sigmoid":  (-31, 31, 0.1), 
+        "silu":  (-31, 31, 0.1),
+        "tanh":  (-31, 31, 0.1),
         "sqrt":  (0.1, 64, 0.1),
         "inv_sqrt":  (0.1, 64, 0.1),
     }

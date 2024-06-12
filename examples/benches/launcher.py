@@ -50,6 +50,12 @@ def get_args():
         help="Use approximations for non-linear functions",
     )
     parser.add_argument(
+        "--lut_only",
+        default=False,
+        action="store_true",
+        help="Use lut only for bounded functions",
+    )
+    parser.add_argument(
         "--party_name",
         default=None,
         type=str,
@@ -84,6 +90,9 @@ def _run_experiment(args):
     if args.approximations:
         logging.info("Using Approximation Config:")
         cfg_file = cfg_file.replace("default", "approximations")
+    elif args.lut_only:
+        logging.info("Using LUT-only Config:")
+        cfg_file = cfg_file.replace("default", "lut_only")
     else:
         logging.info("Using LUTs Config:")
 
