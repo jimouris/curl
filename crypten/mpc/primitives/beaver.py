@@ -229,7 +229,8 @@ def evaluate_lut(x, lut):
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r) % size
+        # z = (x - r) % size
+        z = (x - r)
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
@@ -266,7 +267,8 @@ def evaluate_bior_lut(x, luts, scale, bias):
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r) % size
+        # z = (x - r) % size
+        z = (x - r)
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
@@ -309,7 +311,8 @@ def evaluate_embed(x, embed):
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r) % size
+        # z = (x - r) % size
+        z = (x - r)
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
