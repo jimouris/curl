@@ -14,8 +14,8 @@ functions:
   max_method: "log_reduction"
 
   # exponential function
-  # exp_method: "limit"
-  exp_method: "bior"
+  exp_method: "limit"
+  # exp_method: "bior"
   exp_iterations: 8
   exp_haar_size_bits: 5
   exp_bior_size_bits: 5
