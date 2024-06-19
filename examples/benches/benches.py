@@ -19,7 +19,7 @@ import crypten.communicator as comm
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
 
-def time_me(func=None, n_loops=10):
+def time_me(func=None, n_loops=1):
     """Decorator returning average runtime in seconds over n_loops
 
     Args:
@@ -33,11 +33,10 @@ def time_me(func=None, n_loops=10):
 
     @functools.wraps(func)
     def timing_wrapper(*args, **kwargs):
-        return_val = func(*args, **kwargs)
         times = []
         for _ in range(n_loops):
             start = timeit.default_timer()
-            func(*args, **kwargs)
+            return_val = func(*args, **kwargs)
             times.append(timeit.default_timer() - start)
         mid_runtime = np.quantile(times, 0.5)
         q1_runtime = np.quantile(times, 0.25)
@@ -56,36 +55,42 @@ class FuncBenchmarks:
     """
 
     UNARY = [
-        "sin",
-        "cos",
-        "erf",
-        "gelu",
-        "log",
+        # "tanh",
+
+        # "log",
+        # "silu",
+        # "sigmoid",
+
+        # "sqrt"
+        # "gelu",
         "reciprocal",
-        "sigmoid",
-        "silu",
-        "tanh",
-        "sqrt",
-        "inv_sqrt",
+        # "erf",
+        # "sin",
+        # "cos",
+        # "inv_sqrt",
     ]
 
-    # (start, end, step))
+    # (start, end, step)
     DOMAINS = {
-        "sin": (-31, 31, 0.1),
-        "cos": (-31, 31, 0.1),
-        "erf":  (-31, 31, 0.1),
-        "gelu":  (-3.9, 3.9, 0.1),
-        "log":  (0.1, 63.9, 0.1),
-        # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=0.1) both world have smaller average errors. Range: 1, 64. Size: 8 bits
-        # reciprocal: DOMAIN = torch.arange(start=1.0, end=64, step=1) both world have smaller average errors. Range: 1, 64. Size: 7 bits
-        "reciprocal": (1.0, 63.9, 0.1),
-        "sigmoid":  (-31, 31, 0.1), 
-        "silu":  (-15.9, 15.9, 0.1),
-        "tanh":  (-31, 31, 0.1),
-        "sqrt":  (0.1, 64, 0.1),
-        "inv_sqrt":  (0.1, 10, 0.1),
-    }
+        # "sigmoid": (-7.9, 7.9, 0.1), # this is for the version without comparisons
+        "sigmoid": (0, 64, 0.1), # TODO: check code
+        "tanh":  (-127.9, 127.9, 0.1),
 
+        "erf":  (-31, 31, 0.1),
+        "gelu":  (-3.9, 3.9, 0.1),      # this is for the version without comparisons
+        # "gelu":  (-63.9, 63.9, 0.1),  # when we use comparisons
+
+        # "silu":  (-3.9, 3.9, 0.1),    # TODO
+        # "silu":  (-15.9, 15.9, 0.1),    # this is for the version without comparisons -- silu 0.664784 19.127514       0.060149      4238.018066
+        "silu":  (-63.9, 63.9, 0.1),  # when we use comparisons
+
+        "log":  (0.1, 63.9, 0.1),
+        "reciprocal": (1.0, 63.9, 0.1),
+        "sqrt":  (0.1, 64, 0.1),
+        "inv_sqrt":  (0.1, 128, 0.1),
+        "sin": (-64, 64, 0.1),
+        "cos": (-64, 64, 0.1),
+    }
 
     def __init__(self, tensor_size, device="cpu"):
         self.device = torch.device(device)
@@ -101,17 +106,18 @@ class FuncBenchmarks:
 
     @staticmethod
     @time_me
-    def time_func(x, func):
+    def time_func(x, func, is_encrypted=False):
         """Invokes func as a method of x"""
-        if func == "gelu":
-            gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
-            return gelu(x)
-        elif func == "silu":
-            silu = lambda x: x * x.sigmoid()
-            return silu(x)
-        elif func == "inv_sqrt":
-            inv_sqrt = lambda x: x.sqrt().reciprocal()
-            return inv_sqrt(x)
+        if not is_encrypted:
+            if func == "gelu":
+                gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
+                return gelu(x)
+            elif func == "silu":
+                silu = lambda x: x * x.sigmoid()
+                return silu(x)
+            elif func == "inv_sqrt":
+                inv_sqrt = lambda x: x.sqrt().reciprocal()
+                return inv_sqrt(x)
 
         return getattr(x, func)()
 
@@ -120,16 +126,12 @@ class FuncBenchmarks:
         x = torch.rand(self.tensor_size, device=self.device)*5 + 1
         x_enc = crypten.cryptensor(x)
 
-        runtimes, runtimes_enc = [], []
-
+        runtimes_enc = []
         for func in FuncBenchmarks.UNARY:
-            runtime, _ = FuncBenchmarks.time_func(x, func)
-            runtimes.append(runtime)
-
-            runtime_enc, _ = FuncBenchmarks.time_func(x_enc, func)
+            runtime_enc, _ = FuncBenchmarks.time_func(x_enc, func, is_encrypted=True)
             runtimes_enc.append(runtime_enc)
 
-        return runtimes, runtimes_enc
+        return runtimes_enc
 
     @staticmethod
     def calc_abs_error(ref, out):
@@ -216,29 +218,36 @@ class FuncBenchmarks:
 
         return abs_errors, avg_abs_errors, relative_errors
 
-    def run(self):
+    def run(self, communication):
         """Runs and stores benchmarks in self.df"""
-        _runtimes, runtimes_enc = self.get_runtimes()
+        runtimes_enc = self.get_runtimes()
 
-        abs_errors, avg_abs_errors, relative_errors = self.get_errors()
+        if communication:
+            self.df = pd.DataFrame.from_dict(
+                {
+                    "function": FuncBenchmarks.UNARY,
+                    "runtime": [r.mid for r in runtimes_enc],
+                }
+            )
+        else:
+            abs_errors, avg_abs_errors, relative_errors = self.get_errors()
+            self.df = pd.DataFrame.from_dict(
+                {
+                    "function": FuncBenchmarks.UNARY,
+                    "runtime": [r.mid for r in runtimes_enc],
+                    "total abs err.": abs_errors,
+                    "avg abs err.": avg_abs_errors,
+                    "avg relative err.": relative_errors,
+                }
+            )
 
-        self.df = pd.DataFrame.from_dict(
-            {
-                "function": FuncBenchmarks.UNARY,
-                "runtime": [r.mid for r in runtimes_enc],
-                "total abs err.": abs_errors,
-                "avg abs err.": avg_abs_errors,
-                "avg relative err.": relative_errors,
-            }
-        )
-
-def run_benches(cfg_file, tensor_size, party_name, with_cache=False, verbose=False):
+def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communication=False):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
     crypten.init(cfg_file, party_name=party_name)
-    if verbose:
+    if communication:
         comm.get().set_verbosity(True)
 
     functions_data = cfg.config.get('functions', {})
@@ -250,17 +259,15 @@ def run_benches(cfg_file, tensor_size, party_name, with_cache=False, verbose=Fal
     logging.info(f"="*22 + " Without Cache " + "="*22)
 
     benches = FuncBenchmarks(tensor_size, device=device)
-    benches.run()
+    benches.run(communication)
     logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
-    if verbose:
+    if communication:
         comm.get().print_communication_stats()
+        exit(0)
 
     if with_cache:
-        if verbose:
-            comm.get().reset_communication_stats()
-
         # Populate the cache.
         crypten.fill_cache()
         provider = crypten.mpc.get_default_provider()
@@ -271,7 +278,5 @@ def run_benches(cfg_file, tensor_size, party_name, with_cache=False, verbose=Fal
         # Run with the cache.
         logging.info(f"="*24 + " With Cache " + "="*24)
         benches = FuncBenchmarks(tensor_size, device=device)
-        benches.run()
+        benches.run(False)
         logging.info("'\n{}\n'".format(benches))
-        if verbose:
-            comm.get().print_communication_stats()
