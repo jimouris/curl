@@ -800,7 +800,7 @@ def sigmoid(self):
             lut = msb.evaluate_bior_lut(luts.LUTs["sigmoid_bior"], lsb, st_truncation)
         eval = ltz + sgn * lut
         limit = 1 - ltz
-        check = abs < 2**cfg.functions.sigmoid_lut_max_bits
+        check = abs < 2**cfg.functions.sigmoid_lut_max_bits - 1
         return limit + check * (eval - limit)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
         luts = LookupTables()
@@ -889,7 +889,7 @@ def tanh(self):
             else:
                 msb, lsb = abs.egk_truncmod_pr(62, st_truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["tanh_bior"], lsb, st_truncation)
-        check = abs < 2**cfg.functions.tanh_lut_max_bits
+        check = abs < 2**cfg.functions.tanh_lut_max_bits -1
         return sgn * (1-check + lut * check)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
         luts = LookupTables()
@@ -969,18 +969,18 @@ def erf(self):
         if method == "haar":
             erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb = self.div(2**erf_truncation)
+                msb = abs.div(2**erf_truncation)
             else:
-                msb = self.egk_trunc_pr(62, erf_truncation)
+                msb = abs.egk_trunc_pr(62, erf_truncation)
             lut = msb.evaluate_lut(luts.LUTs["erf_haar"])
         elif method == "bior":
             erf_truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_bior_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb, lsb = self.divmod(2**erf_truncation)
+                msb, lsb = abs.divmod(2**erf_truncation)
             else:
-                msb, lsb = self.egk_truncmod_pr(62, erf_truncation)
+                msb, lsb = abs.egk_truncmod_pr(62, erf_truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["erf_bior"], lsb, erf_truncation)
-        check = abs < 2**cfg.functions.erf_lut_max_bits
+        check = abs < 2**cfg.functions.erf_lut_max_bits - 1
         return sgn * (1-check + lut * check)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
         luts = LookupTables()
