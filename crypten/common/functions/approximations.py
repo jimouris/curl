@@ -305,7 +305,7 @@ class LookupTables:
                               lambda x: gelu(x),
                               "gelu_bior_lut_only",
                               negative_values=True)
-            
+
         """Silu LUT"""
         if cfg.functions.silu_method in ("haar", "bior", "haar-lut-only", "bior-lut-only"):
             silu = lambda x: x * sigmoid(x)
@@ -787,16 +787,16 @@ def sigmoid(self):
         if method == "haar":
             st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb = self.div(2**st_truncation)
+                msb = abs.div(2**st_truncation)
             else:
-                msb = self.egk_trunc_pr(62, st_truncation)
+                msb = abs.egk_trunc_pr(62, st_truncation)
             lut = msb.evaluate_lut(luts.LUTs["sigmoid_haar"])
         elif method == "bior":
             st_truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_bior_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb, lsb = self.divmod(2**st_truncation)
+                msb, lsb = abs.divmod(2**st_truncation)
             else:
-                msb, lsb = self.egk_truncmod_pr(62, st_truncation)
+                msb, lsb = abs.egk_truncmod_pr(62, st_truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["sigmoid_bior"], lsb, st_truncation)
         eval = ltz + sgn * lut
         limit = 1 - ltz
@@ -878,16 +878,16 @@ def tanh(self):
         if method == "haar":
             st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb = self.div(2**st_truncation)
+                msb = abs.div(2**st_truncation)
             else:
-                msb = self.egk_trunc_pr(62, st_truncation)
+                msb = abs.egk_trunc_pr(62, st_truncation)
             lut = msb.evaluate_lut(luts.LUTs["tanh_haar"])
         elif method == "bior":
             st_truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_bior_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb, lsb = self.divmod(2**st_truncation)
+                msb, lsb = abs.divmod(2**st_truncation)
             else:
-                msb, lsb = self.egk_truncmod_pr(62, st_truncation)
+                msb, lsb = abs.egk_truncmod_pr(62, st_truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["tanh_bior"], lsb, st_truncation)
         check = abs < 2**cfg.functions.tanh_lut_max_bits
         return sgn * (1-check + lut * check)
