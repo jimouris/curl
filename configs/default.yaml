@@ -28,7 +28,7 @@ functions:
   log_exp_iterations: 8
   log_order: 8
   log_haar_size_bits: 8
-  log_bior_size_bits: 8
+  log_bior_size_bits: 7
   log_lut_max_bits: 6
 
   # reciprocal configuration
@@ -46,7 +46,7 @@ functions:
   sqrt_nr_iters: 3
   sqrt_nr_initial: null
   sqrt_haar_size_bits: 6
-  sqrt_bior_size_bits: 10
+  sqrt_bior_size_bits: 9
   sqrt_lut_max_bits: 6
 
   # inv_sqrt configuration
@@ -61,7 +61,8 @@ functions:
   sigmoid_tanh_terms: 32
   sigmoid_tanh_haar_size_bits: 6
   sigmoid_tanh_bior_size_bits: 6
-  sigmoid_lut_max_bits: 4 # [-16, 16]
+  sigmoid_lut_max_bits: 4 # [-16, 16] for "bior"
+  # sigmoid_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
   tanh_lut_max_bits: 3 # [-8, 8]
 
   # trigonometry configuration
@@ -77,7 +78,7 @@ functions:
   erf_method: "bior"
   erf_iterations: 8
   erf_haar_size_bits: 5
-  erf_bior_size_bits: 5
+  erf_bior_size_bits: 7
   erf_lut_max_bits: 2 # [-4, 4]
 
   # gelu configuration:
@@ -92,7 +93,8 @@ functions:
   # silu_method: "bior-lut-only"
   silu_haar_size_bits: 4
   silu_bior_size_bits: 6
-  silu_lut_max_bits: 4 # [-16, 16]
+  silu_lut_max_bits: 4 # [-16, 16] for "bior"
+  # silu_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
 mpc:
   active_security: False
   provider: "TFP"

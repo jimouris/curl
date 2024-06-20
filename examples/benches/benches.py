@@ -55,41 +55,32 @@ class FuncBenchmarks:
     """
 
     UNARY = [
-        # "tanh",
-
-        # "log",
-        # "silu",
-        # "sigmoid",
-
-        # "sqrt"
-        # "gelu",
+        "cos",
+        "erf",
+        "gelu",
+        "inv_sqrt",
+        "log",
         "reciprocal",
-        # "erf",
-        # "sin",
-        # "cos",
-        # "inv_sqrt",
+        "sigmoid",
+        "silu",
+        "sin",
+        "sqrt",
+        "tanh",
     ]
 
     # (start, end, step)
     DOMAINS = {
-        # "sigmoid": (-7.9, 7.9, 0.1), # this is for the version without comparisons
-        "sigmoid": (0, 64, 0.1), # TODO: check code
-        "tanh":  (-127.9, 127.9, 0.1),
-
-        "erf":  (-31, 31, 0.1),
-        "gelu":  (-3.9, 3.9, 0.1),      # this is for the version without comparisons
-        # "gelu":  (-63.9, 63.9, 0.1),  # when we use comparisons
-
-        # "silu":  (-3.9, 3.9, 0.1),    # TODO
-        # "silu":  (-15.9, 15.9, 0.1),    # this is for the version without comparisons -- silu 0.664784 19.127514       0.060149      4238.018066
-        "silu":  (-63.9, 63.9, 0.1),  # when we use comparisons
-
-        "log":  (0.1, 63.9, 0.1),
+        "silu":     (-63.9, 63.9, 0.1),
+        "sigmoid":  (-63.9, 63.9, 0.1),
+        "tanh":     (-63.9, 63.9, 0.1),
+        "erf":      (-63.9, 63.9, 0.1),
+        "gelu":     (-63.9, 63.9, 0.1),
+        "log":      (0.1, 63.9, 0.1),
         "reciprocal": (1.0, 63.9, 0.1),
-        "sqrt":  (0.1, 64, 0.1),
-        "inv_sqrt":  (0.1, 128, 0.1),
-        "sin": (-64, 64, 0.1),
-        "cos": (-64, 64, 0.1),
+        "sqrt":     (0.1, 63.9, 0.1),
+        "inv_sqrt": (0.1, 128, 0.1),
+        "sin":      (-63.9, 63.9, 0.1),
+        "cos":      (-63.9, 63.9, 0.1),
     }
 
     def __init__(self, tensor_size, device="cpu"):
@@ -160,7 +151,7 @@ class FuncBenchmarks:
         if ref.dtype == torch.bool:
             errors = (out != ref).numpy().sum() // ref.nelement()
             return errors
-        errors = torch.abs((out - ref) / ref)
+        errors = torch.where(ref == 0, torch.tensor(0.0), torch.abs((out - ref) / ref))
         # remove inf due to division by tiny numbers
         errors = errors[errors != float("inf")].numpy()
         errors = errors[~np.isnan(errors)]

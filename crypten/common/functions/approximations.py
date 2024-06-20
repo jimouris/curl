@@ -1027,16 +1027,16 @@ def gelu(self):
         if method == "haar":
             truncation = cfg.functions.gelu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.gelu_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb = self.div(2**truncation)
+                msb = abs.div(2**truncation)
             else:
-                msb = self.egk_trunc_pr(62, truncation)
+                msb = abs.egk_trunc_pr(62, truncation)
             lut = msb.evaluate_lut(luts.LUTs["gelu_haar"])
         elif method == "bior":
             truncation = cfg.functions.gelu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.gelu_bior_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb, lsb = self.divmod(2**truncation)
+                msb, lsb = abs.divmod(2**truncation)
             else:
-                msb, lsb = self.egk_truncmod_pr(62, truncation)
+                msb, lsb = abs.egk_truncmod_pr(62, truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["gelu_bior"], lsb, truncation)
         check = abs < 2**cfg.functions.gelu_lut_max_bits
         return relu - lut * check
@@ -1079,18 +1079,18 @@ def silu(self):
         if method == "haar":
             truncation = cfg.functions.silu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.silu_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb = self.div(2**truncation)
+                msb = abs.div(2**truncation)
             else:
-                msb = self.egk_trunc_pr(62, truncation)
+                msb = abs.egk_trunc_pr(62, truncation)
             lut = msb.evaluate_lut(luts.LUTs["silu_haar"])
         elif method == "bior":
             truncation = cfg.functions.silu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.silu_bior_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
-                msb, lsb = self.divmod(2**truncation)
+                msb, lsb = abs.divmod(2**truncation)
             else:
-                msb, lsb = self.egk_truncmod_pr(62, truncation)
+                msb, lsb = abs.egk_truncmod_pr(62, truncation)
             lut = msb.evaluate_bior_lut(luts.LUTs["silu_bior"], lsb, truncation)
-        check = abs < 2**cfg.functions.silu_lut_max_bits
+        check = abs < 2**cfg.functions.silu_lut_max_bits - 1
         return relu - lut * check
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
         luts = LookupTables()
