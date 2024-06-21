@@ -32,11 +32,10 @@ def time_me(func=None, n_loops=1):
 
     @functools.wraps(func)
     def timing_wrapper(*args, **kwargs):
-        return_val = func(*args, **kwargs)
         times = []
         for _ in range(n_loops):
             start = timeit.default_timer()
-            func(*args, **kwargs)
+            return_val = func(*args, **kwargs)
             times.append(timeit.default_timer() - start)
         mid_runtime = np.quantile(times, 0.5)
         q1_runtime = np.quantile(times, 0.25)
@@ -91,7 +90,7 @@ class LLMs:
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
 
-        runtimes, runtimes_enc = [], []
+        runtimes_enc = []
         for llm in self.models:
             if self.full:
                 x = torch.rand(self.tensor_size, device=self.device)
@@ -101,17 +100,14 @@ class LLMs:
 
             llm.eval()
 
-            # runtime, _ = LLMs.time_llm(x, llm)
-            # runtimes.append(runtime)
-
             runtime_enc, _ = LLMs.time_llm(x_enc, llm)
             runtimes_enc.append(runtime_enc)
 
-        return runtimes, runtimes_enc
+        return runtimes_enc
 
     def run(self):
         """Runs and stores benchmarks in self.df"""
-        _runtimes, runtimes_enc = self.get_runtimes()
+        runtimes_enc = self.get_runtimes()
 
         self.df = pd.DataFrame.from_dict(
             {
@@ -120,13 +116,13 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, verbose=False, full=True):
+def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True):
     device = torch.device("cpu")
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
     crypten.init(cfg_file, party_name=party_name)
-    if verbose:
+    if communication:
         comm.get().set_verbosity(True)
 
     functions_data = cfg.config.get('functions', {})
@@ -142,11 +138,11 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, verbose=
     logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
-    if verbose:
+    if communication:
         comm.get().print_communication_stats()
 
     if with_cache:
-        if verbose:
+        if communication:
             comm.get().reset_communication_stats()
 
         # Populate the cache.
@@ -161,5 +157,5 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, verbose=
         benches = LLMs(model, tensor_size, device=device, full=full)
         benches.run()
         logging.info("'\n{}\n'".format(benches))
-        if verbose:
+        if communication:
             comm.get().print_communication_stats()

@@ -9,6 +9,7 @@ import logging
 import os
 
 import crypten
+from crypten.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
 
 
@@ -62,7 +63,7 @@ def get_args():
         help="The name of the party",
     )
     parser.add_argument(
-        "--verbose",
+        "--communication",
         default=False,
         action="store_true",
         help="Print communication statistics",
@@ -112,15 +113,19 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.verbose, not args.not_full)
+    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.communication, not args.not_full)
 
     print('Done')
 
 def main(run_experiment):
     args = get_args()
+    cfg_file = get_config(args)
+    crypten.cfg.load_config(cfg_file)
+
+    if args.communication and cfg.mpc.provider == "TTP":
+        raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        cfg_file = get_config(args)
         launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
