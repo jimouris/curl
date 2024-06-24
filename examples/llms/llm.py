@@ -71,9 +71,17 @@ class LLMs:
         self.full = full
         model = model.lower()
         if model is None or model == 'all':
-            self.models = [m(seq_len=tensor_size[1], full=full).encrypt(src=0) for m in all_models.values()]
+            self.models = []
+            for m in all_models.values():
+                m_clear = m(seq_len=tensor_size[1], full=full)
+                if hasattr(m_clear, "to"):
+                    m_clear = m_clear.to(self.device)
+                self.models.append(m_clear.encrypt(src=0))
         elif model in all_models:
-            self.models = [all_models[model](seq_len=tensor_size[1], full=full).encrypt(src=0)]
+            m_clear = all_models[model](seq_len=tensor_size[1], full=full)
+            if hasattr(m_clear, "to"):
+                m_clear = m_clear.to(self.device)
+            self.models = [m_clear.encrypt(src=0)]
         else:
             raise ValueError(f"Invalid model name: {model}. Choose from: {', '.join(all_models.keys())}")
 
@@ -116,12 +124,12 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True):
-    device = torch.device("cpu")
+def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True, device="cpu"):
+    device = torch.device(device)
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file, party_name=party_name)
+    crypten.init(cfg_file, party_name=party_name, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
@@ -140,11 +148,9 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communic
 
     if communication:
         comm.get().print_communication_stats()
+        exit(0)
 
     if with_cache:
-        if communication:
-            comm.get().reset_communication_stats()
-
         # Populate the cache.
         crypten.fill_cache()
         provider = crypten.mpc.get_default_provider()
@@ -157,5 +163,3 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communic
         benches = LLMs(model, tensor_size, device=device, full=full)
         benches.run()
         logging.info("'\n{}\n'".format(benches))
-        if communication:
-            comm.get().print_communication_stats()

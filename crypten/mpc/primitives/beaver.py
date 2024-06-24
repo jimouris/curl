@@ -5,6 +5,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 import crypten
 import crypten.communicator as comm
 import torch
@@ -178,8 +179,8 @@ def egk_trunc_pr(x, l, m):
     Link: https://eprint.iacr.org/2020/338.pdf
 
     Args:
-        a (torch.Tensor): Input tensor.
-        l (int): Max bit size of input tensor, i.e., 0 <= a < 2**l.
+        x (torch.Tensor): Input tensor.
+        l (int): Max bit size of input tensor, i.e., 0 <= x < 2**l.
         m (int): number of bits to truncate.
 
     Returns:
@@ -202,9 +203,9 @@ def egk_trunc_pr(x, l, m):
         c_p = c >> (k - l - 1)
         # Step 2
         c_pl = (c_p >> l) & 1 # c'_l, the l-th (last) bit of c'
-        v = b + c_pl - 2 * c_pl * b
+        v = b + c_pl - 2 * b * c_pl
         # Step 3
-        y = ((c_p % two_to_l) // 2**m) - r + 2**(l-m) * v - 2**(l-m-1)
+        y = 2**(l-m) * v - r - 2**(l-m-1) + ((c_p % two_to_l) // 2**m)
 
     return y
 

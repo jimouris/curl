@@ -8,6 +8,8 @@ import argparse
 import logging
 import os
 
+import torch
+
 import crypten
 from crypten.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
@@ -87,6 +89,13 @@ def get_args():
         required=True,
         help="Choose a model to run from the following options: {}".format(models),
     )
+    parser.add_argument(
+        "--device",
+        "-d",
+        required=False,
+        default="cpu",
+        help="the device to run the benchmarks",
+    )
     args = parser.parse_args()
     return args
 
@@ -113,7 +122,7 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.communication, not args.not_full)
+    run_llm(cfg_file, args.tensor_size, args.party_name, args.model, args.with_cache, args.communication, not args.not_full, args.device)
 
     print('Done')
 
@@ -126,7 +135,8 @@ def main(run_experiment):
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
+        device = torch.device(args.device)
+        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file, device)
         launcher.start()
         launcher.join()
         launcher.terminate()

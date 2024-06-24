@@ -27,7 +27,7 @@ class GPT(nn.Module):
 
         if full:
             self.tok_embed = nn.Embedding(vocab_size, embed_dim)
-            self.pos_embed = crypten.cryptensor(torch.zeros(1, seq_len, embed_dim))
+            self.pos_embed = nn.Parameter(crypten.cryptensor(torch.zeros(1, seq_len, embed_dim)))
 
         self.blocks = nn.Sequential(
             *[GPT.Block(embed_dim, num_heads) for _ in range(num_blocks)]
@@ -40,7 +40,7 @@ class GPT(nn.Module):
     def forward(self, x, target=None):
         if self.full:
             tok_embedding = self.tok_embed(x)
-            pos_embedding = self.pos_embed[:, :x.size()[1], :]
+            pos_embedding = self.pos_embed(x)[:, :x.size()[1], :]
             x = tok_embedding + pos_embedding
         x = self.blocks(x)
         if self.full:
