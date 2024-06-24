@@ -1966,7 +1966,7 @@ class MatMul(Module):
 
 
 class Attention(Module):
-    def __init__(self, embed_dim, num_heads):
+    def __init__(self, embed_dim, num_heads, mask=False):
         super(Attention, self).__init__()
 
         assert embed_dim % num_heads == 0, "invalid heads and embedding dimension"
@@ -1974,6 +1974,7 @@ class Attention(Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.search_dim = embed_dim // num_heads
+        self.mask = mask
 
         self.search = Linear(embed_dim, 3 * embed_dim)
         self.proj = Linear(embed_dim, embed_dim)
@@ -1988,6 +1989,11 @@ class Attention(Module):
         value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
 
         attn = query.matmul(key) / math.sqrt(query.size(-1))
+
+        if self.mask:
+            mask = torch.tril(torch.ones(attn.shape))
+            attn = attn * mask
+
         attn = attn.softmax(dim=-1)
 
         y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)

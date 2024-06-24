@@ -635,6 +635,11 @@ def inv_sqrt(self):
             b = self < 1
             return b * y_0 + (1-b) * y_1
     elif method == "NR":
+        correct = self > 64
+        precision = self.encoder._precision_bits
+        correction = correct * (2**precision - 2**(precision-6))
+        correction.encoder._precision_bits = precision
+        self = self * (1.0 - correction)
         # Initialize using decent approximation
         if initial is None:
             y = exp(self.div(2).add(0.2).neg()).mul(2.2).add(0.2)
@@ -645,6 +650,10 @@ def inv_sqrt(self):
         # Newton Raphson iterations for inverse square root
         for _ in range(iters):
             y = y.mul_(3 - self * y.square()).div_(2)
+
+        correction = correct * (2**precision - 2**(precision-3))
+        correction.encoder._precision_bits = precision
+        y = y * (1.0 - correction)
         return y
     else:
         raise ValueError(f"Invalid method {method} given for inv_sqrt function")
@@ -1089,6 +1098,7 @@ def gelu(self):
             else:
                 msb, lsb = self.egk_truncmod_pr(62, truncation)
             return msb.evaluate_bior_lut(luts.LUTs["gelu_bior_lut_only"], lsb, truncation)
+        return relu - lut * check
     elif method == "erf":
         gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
         return gelu
