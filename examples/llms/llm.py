@@ -98,6 +98,9 @@ class LLMs:
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
 
+        rank = comm.get().get_rank()
+        print(f'[Device] Party-{rank} running in {self.device}')
+
         runtimes_enc = []
         for llm in self.models:
             if self.full:
@@ -124,7 +127,7 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True, device="cpu"):
+def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True, device=None):
     device = torch.device(device)
     logging.info("Tensor size '{}'".format(tensor_size))
 

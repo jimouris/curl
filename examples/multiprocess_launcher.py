@@ -11,22 +11,34 @@ import os
 import uuid
 
 import crypten
-
+import torch
 
 class MultiProcessLauncher:
 
     # run_process_fn will be run in subprocesses.
-    def __init__(self, world_size, run_process_fn, fn_args=None, cfg_file=None, device=None):
+    def __init__(self, world_size, run_process_fn, fn_args=None, cfg_file=None):
         env = os.environ.copy()
         env["WORLD_SIZE"] = str(world_size)
         multiprocessing.set_start_method("spawn")
+        device = torch.device(fn_args.device)
 
         # Use random file so multiple jobs can be run simultaneously
         INIT_METHOD = "file:///tmp/crypten-rendezvous-{}".format(uuid.uuid1())
         env["RENDEZVOUS"] = INIT_METHOD
 
+        # Using multiple GPUs
+        if fn_args.multi_gpu:
+            assert (
+                fn_args.world_size <= torch.cuda.device_count()
+            ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
+
         self.processes = []
         for rank in range(world_size):
+            if fn_args.multi_gpu:
+                device = torch.device(f"cuda:{rank}")
+                fn_args.device = device
+                print(f'Running party {rank} in {device}')
+
             process_name = "process " + str(rank)
             process = multiprocessing.Process(
                 target=self.__class__._run_process,
@@ -36,6 +48,12 @@ class MultiProcessLauncher:
             self.processes.append(process)
 
         if crypten.mpc.ttp_required():
+            if fn_args.multi_gpu:
+                ttp_device = torch.device(f"cuda:0")
+            else:
+                ttp_device = device
+            fn_args.device = ttp_device
+
             ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name="TTP",
@@ -46,7 +64,7 @@ class MultiProcessLauncher:
                     crypten.mpc.provider.TTPServer,
                     None,
                     cfg_file,
-                    device,
+                    ttp_device,
                 ),
             )
             self.processes.append(ttp_process)
