@@ -167,7 +167,8 @@ def truncate(x, y):
     x.share -= correction.share
     return x
 
-def egk_trunc_pr(a, l, m):
+
+def egk_trunc_pr(x, l, m):
     """
     Evaluates probabilistic truncation with no correctness error using [EGK+20]
     protocol.
@@ -188,13 +189,13 @@ def egk_trunc_pr(a, l, m):
     provider = crypten.mpc.get_default_provider()
     k = 64
     two_to_l = torch.tensor(2**l, dtype=torch.int64) # to prevent overflow
-    tensor_size = a.size()
+    tensor_size = x.size()
 
-    # Preprocessing   
-    r, r_p, b = provider.egk_trunc_pr_rng(tensor_size, l, m)
-    with IgnoreEncodings([a, b]):
+    # Preprocessing
+    r, r_p, b = provider.egk_trunc_pr_rng(tensor_size, l, m, device=x.device)
+    with IgnoreEncodings([x, b]):
         # Step 1
-        a_p = a + 2**(l-1) # allowing negative numbers
+        a_p = x + 2**(l-1) # allowing negative numbers
         rpp = 2**m * r + r_p
         enc_c = 2**(k - l - 1) * (a_p + two_to_l * b + rpp)
         c = enc_c.reveal()
@@ -204,7 +205,7 @@ def egk_trunc_pr(a, l, m):
         v = b + c_pl - 2 * c_pl * b
         # Step 3
         y = ((c_p % two_to_l) // 2**m) - r + 2**(l-m) * v - 2**(l-m-1)
-    
+
     return y
 
 
