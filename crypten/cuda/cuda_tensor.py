@@ -79,6 +79,7 @@ class CUDALongTensor:
         else:
             self._tensor = torch.as_tensor(data, dtype=torch.long, device=device)
 
+    @classmethod
     def __torch_function__(self, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}

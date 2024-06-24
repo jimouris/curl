@@ -292,6 +292,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         clone.requires_grad = False
         return clone
 
+    @classmethod
     def __torch_function__(self, func, types, args=(), kwargs=None):
         """Allows torch static functions to work on CrypTensors."""
         if kwargs is None:
@@ -573,7 +574,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
     def __nonzero__(self):
         """__bool__ for backwards compatibility with Python 2"""
         raise RuntimeError("Cannot evaluate CrypTensors to boolean values")
-    
+
     def egk_trunc_pr(self, tensor, l, m):
         self.egk_trunc_pr(tensor, l, m)
         return self

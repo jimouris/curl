@@ -7,7 +7,6 @@
 
 import crypten.communicator as comm
 import torch
-import logging
 from crypten.common.rng import generate_kbit_random_tensor, generate_random_ring_element
 from crypten.common.util import count_wraps, torch_stack
 from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
@@ -86,17 +85,18 @@ class TrustedFirstParty(TupleProvider):
         one_hot = []
         for i in range(lut_size):
             one_hot.append((r_clear == i) * 1)
-        one_hot = torch.stack(one_hot)
+        one_hot = torch_stack(one_hot)
+
         one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
         r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
         return r_shares, one_hot
-    
+
     def egk_trunc_pr_rng(self, size, l, m, device=None):
         """
         Generate random shared tensors for the [EGK+20] probabilistic
         truncation protocol.
         """
-        
+
         r = generate_kbit_random_tensor(size, l-m, device=device)
         r_shares = ArithmeticSharedTensor(r, precision=0, src=0)
         r_p = generate_kbit_random_tensor(size, m, device=device)
@@ -104,9 +104,4 @@ class TrustedFirstParty(TupleProvider):
         b = generate_kbit_random_tensor(size, 1, device=device)
         b_shares = ArithmeticSharedTensor(b, precision=0, src=0)
 
-        return r_shares, r_p_shares, b_shares 
-
-
-
-
-
+        return r_shares, r_p_shares, b_shares

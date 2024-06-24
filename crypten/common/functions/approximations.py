@@ -12,7 +12,7 @@ import pywt
 import crypten
 import torch
 from crypten.config import cfg
-
+from crypten.cuda import CUDALongTensor
 
 __all__ = [
     "exp",
@@ -38,7 +38,7 @@ class LookupTables:
     LUTs = {}
 
     """Use to create a singleton"""
-    def __new__(cls, *args, **kwds):
+    def __new__(cls, device=None, *args, **kwds):
         """
         >>> s = Singleton()
         >>> p = Singleton()
@@ -53,7 +53,7 @@ class LookupTables:
         it = object.__new__(cls)
         setattr(cls, it_id, it)
         it.init(*args, **kwds)
-        it.initialize_luts()
+        it.initialize_luts(device=device)
         return it
 
     def init(self, *args, **kwds):
@@ -87,7 +87,7 @@ class LookupTables:
         cls.LUTs[name] = torch.tensor((coeffs * scale) * 2**(depth*0.5)).long()
 
     @classmethod
-    def initialize_luts(cls):
+    def initialize_luts(cls, device=None):
         r"""Initialize LUTs for different approximation functions:
             * exp: Exponential
             * log: Logarithm
@@ -327,6 +327,14 @@ class LookupTables:
                               lambda x: silu(x),
                               "silu_bior_lut_only",
                               negative_values=True)
+
+        if device is None:
+            device = "cpu"
+        device = torch.device(device)
+        if device.type == "cuda":
+            for lut in cls.LUTs:
+                cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut])
+
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""

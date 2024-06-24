@@ -232,12 +232,13 @@ class FuncBenchmarks:
                 }
             )
 
-def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communication=False):
-    device = torch.device("cpu")
+def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communication=False, device="cpu"):
+    device = torch.device(device)
+
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file, party_name=party_name)
+    crypten.init(cfg_file, party_name=party_name, device=device)
     if communication:
         comm.get().set_verbosity(True)
 

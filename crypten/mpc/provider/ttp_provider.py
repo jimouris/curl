@@ -13,7 +13,7 @@ import crypten.communicator as comm
 import torch
 import torch.distributed as dist
 from crypten.common.rng import generate_kbit_random_tensor, generate_random_ring_element
-from crypten.common.util import count_wraps
+from crypten.common.util import count_wraps, torch_stack
 from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 
 from .provider import TupleProvider
@@ -149,7 +149,7 @@ class TrustedThirdParty(TupleProvider):
             r_p = TTPClient.get().ttp_request("egk_trunc_pr_rng", device, size, m)
         else:
             r_p = generate_random_ring_element(size, generator=generator, device=device)
-        
+
         _ = generate_random_ring_element(size, generator=generator, device=device)
         if comm.get().get_rank() == 0:
             b = TTPClient.get().ttp_request("egk_trunc_pr_rng", device, size, 1)
@@ -280,7 +280,7 @@ class TTPServer:
         ttp_rank = comm.get().get_ttp_rank()
 
         logging.info("TTPServer Initialized")
-        
+
         try:
             while True:
                 # Wait for next request from client
@@ -415,20 +415,17 @@ class TTPServer:
         r = self._get_additive_PRSS(tensor_size)
         r_clear = r % lut_size
 
-        one_hot_clear = []
+        one_hot = []
         for i in range(lut_size):
-            one_hot_clear.append((r_clear == i) * 1)
-        one_hot_clear = torch.stack(one_hot_clear)
+            one_hot.append((r_clear == i) * 1)
+        one_hot = torch_stack(one_hot)
 
-        return one_hot_clear - self._get_additive_PRSS(one_hot_clear.size(), remove_rank=True)
-    
+        return one_hot - self._get_additive_PRSS(one_hot.size(), remove_rank=True)
+
     def egk_trunc_pr_rng(self, size, exp):
 
         r = self._get_additive_PRSS(size) % 2**exp
         # Subtract all other shares of `r` from plaintext value of `r` to get `r0`
         # everyone else can use their generators to create their shares
-        r0 = r - self._get_additive_PRSS(size, remove_rank=True) 
+        r0 = r - self._get_additive_PRSS(size, remove_rank=True)
         return r0 # the shares of party 0
-    
-
-    

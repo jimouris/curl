@@ -188,7 +188,7 @@ def egk_trunc_pr(x, l, m):
 
     provider = crypten.mpc.get_default_provider()
     k = 64
-    two_to_l = torch.tensor(2**l, dtype=torch.int64) # to prevent overflow
+    two_to_l = torch.tensor(2**l, dtype=torch.int64, device=x.device) # to prevent overflow
     tensor_size = x.size()
 
     # Preprocessing
@@ -209,7 +209,6 @@ def egk_trunc_pr(x, l, m):
     return y
 
 
-
 def evaluate_lut(x, lut):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
 
@@ -226,7 +225,7 @@ def evaluate_lut(x, lut):
     x = x.flatten()
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, device=x.device)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
@@ -235,7 +234,8 @@ def evaluate_lut(x, lut):
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
-        indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
+        arange = torch.arange(size).to(device=x.device)
+        indices = (arange[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
         lookup = one_hot_r * lut
         result = lookup.sum(dim=1)
@@ -245,6 +245,7 @@ def evaluate_lut(x, lut):
         result = lookup.sum()
     result = result.reshape(shape)
     return result
+
 
 def evaluate_bior_lut(x, luts, scale, bias):
     """Evaluates a Look-Up Table (LUT) using an input tensor x.
@@ -264,7 +265,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
     x = x.flatten()
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, device=x.device)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
@@ -273,7 +274,8 @@ def evaluate_bior_lut(x, luts, scale, bias):
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
-        indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
+        arange = torch.arange(size).to(device=x.device)
+        indices = (arange[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
         lookup0 = one_hot_r * luts[0]
         lut0 = lookup0.sum(dim=1)
@@ -292,6 +294,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
         result = result.reshape(shape)
     return result
 
+
 def evaluate_embed(x, embed):
     """Evaluates an embedding using an input tensor x.
 
@@ -308,7 +311,7 @@ def evaluate_embed(x, embed):
     x = x.flatten()
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size, x.device)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, device=x.device)
 
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
@@ -317,7 +320,8 @@ def evaluate_embed(x, embed):
         shift_amount = z.reveal() % size
 
     if shift_amount.size():
-        indices = (torch.arange(size)[None, :] - shift_amount[:, None]) % size
+        arange = torch.arange(size).to(device=x.device)
+        indices = (arange[None, :] - shift_amount[:, None]) % size
         one_hot_r = one_hot_r.gather(1, indices)
         lookup = one_hot_r.matmul(embed)
     else:
@@ -325,6 +329,7 @@ def evaluate_embed(x, embed):
         lookup = one_hot_r.matmul(embed)
     result = lookup.reshape(shape)
     return result
+
 
 def AND(x, y):
     """
