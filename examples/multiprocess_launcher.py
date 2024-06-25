@@ -5,6 +5,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
 import logging
 import multiprocessing
 import os
@@ -36,14 +37,17 @@ class MultiProcessLauncher:
         for rank in range(world_size):
             if fn_args.multi_gpu:
                 device = torch.device(f"cuda:{rank}")
-                fn_args.device = device
+                new_args = copy.deepcopy(fn_args)
+                new_args.device = device
                 print(f'Running party {rank} in {device}')
+            else:
+                new_args = fn_args
 
             process_name = "process " + str(rank)
             process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name=process_name,
-                args=(rank, world_size, env, run_process_fn, fn_args, cfg_file, device),
+                args=(rank, world_size, env, run_process_fn, new_args, cfg_file, device),
             )
             self.processes.append(process)
 
@@ -52,7 +56,8 @@ class MultiProcessLauncher:
                 ttp_device = torch.device(f"cuda:0")
             else:
                 ttp_device = device
-            fn_args.device = ttp_device
+            new_args = copy.deepcopy(fn_args)
+            new_args.device = ttp_device
 
             ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
