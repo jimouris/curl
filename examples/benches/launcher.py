@@ -83,6 +83,14 @@ def get_args():
         default="cpu",
         help="the device to run the benchmarks",
     )
+    parser.add_argument(
+        "--multi-gpu",
+        "-mg",
+        required=False,
+        default=False,
+        action="store_true",
+        help="use different gpu for each party. Will override --device if selected",
+    )
     args = parser.parse_args()
     return args
 
@@ -124,8 +132,7 @@ def main(run_experiment):
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        device = torch.device(args.device)
-        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file, device)
+        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()
