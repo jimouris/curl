@@ -291,7 +291,7 @@ def evaluate_bior_lut(x, luts, scale, bias):
     with IgnoreEncodings([scale]):
         scaling = scale.flatten()
         lut = (lut1 - lut0) * scaling + 2**bias * lut0
-        result = lut.div(int(2**(2*bias)))
+        result = lut.egk_trunc_pr(62, 2*bias) # div by 2**(2*bias)
         result = result.reshape(shape)
     return result
 
