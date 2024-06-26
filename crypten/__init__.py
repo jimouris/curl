@@ -73,14 +73,13 @@ def init(config_file=None, party_name=None, device=None):
     if party_name is not None:
         comm.get().set_name(party_name)
 
-    crypten.common.functions.approximations.LookupTables(device=device)
-
     # Setup seeds for Random Number Generation
     if comm.get().get_rank() < comm.get().get_world_size():
         _setup_prng()
         if crypten.mpc.ttp_required():
             crypten.mpc.provider.ttp_provider.TTPClient._init()
-
+        # Initialize the LUTs for the computing parties
+        crypten.common.functions.approximations.LookupTables(device=device)
 
 def init_thread(rank, world_size):
     comm._init(use_threads=True, rank=rank, world_size=world_size)

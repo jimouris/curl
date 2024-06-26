@@ -132,7 +132,7 @@ def _run_experiment(args):
 
     print('Done')
 
-def main(run_experiment):
+def main():
     args = get_args()
     cfg_file = get_config(args)
     crypten.cfg.load_config(cfg_file)
@@ -141,13 +141,13 @@ def main(run_experiment):
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, run_experiment, args, cfg_file)
+        launcher = MultiProcessLauncher(args.world_size, _run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()
     else:
-        run_experiment(args)
+        _run_experiment(args)
 
 
 if __name__ == "__main__":
-    main(_run_experiment)
+    main()

@@ -330,15 +330,17 @@ class LookupTables:
 
         if device is None:
             device = "cpu"
-        device = torch.device(device)
-        if device.type == "cuda":
+        else:
+            device = str(device)
+        if "cuda" in device:
             for lut in cls.LUTs:
-                cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut])
+                cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
+        print(f'[Device] LUTs initialized for {device}\n')
 
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""
-    luts = LookupTables()
+    luts = LookupTables(self.device)
     precision = 2**cfg.encoder.precision_bits
     size = cfg.functions.exp_neg_lut_size
 
@@ -394,7 +396,7 @@ def exp(self):
     if method in ("split", "haar", "bior"):
         if cfg.functions.exp_all_neg:
             return _nexp_lut(-self, method)
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         if method == "haar":
             truncation = cfg.functions.exp_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.exp_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -461,7 +463,7 @@ def log(self, input_in_01=False, use_lut=False):
     method = cfg.functions.log_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         if method == "haar":
             log_truncation = cfg.functions.log_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.log_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -541,7 +543,7 @@ def reciprocal(self, input_in_01=False):
             return sgn * reciprocal(pos)
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         if method == "haar":
             reciprocal_truncation = cfg.functions.reciprocal_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.reciprocal_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -596,7 +598,7 @@ def inv_sqrt(self):
     method = cfg.functions.inv_sqrt_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         if method == "haar":
             truncation = cfg.functions.inv_sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -643,7 +645,7 @@ def sqrt(self):
     method = cfg.functions.sqrt_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         if method == "haar":
             truncation = cfg.functions.sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sqrt_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -696,7 +698,7 @@ def cossin(self):
     """
     method = cfg.functions.trigonometry_method
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         sgn = self.sign()
         self = sgn * self
         self = self * (1.0 / (2 * np.pi))
@@ -720,7 +722,7 @@ def cossin(self):
         sin = sgn * sin
         return cos, sin
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.trigonometry_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.trigonometry_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.trigonometry_haar_size_bits
@@ -788,7 +790,7 @@ def sigmoid(self):
     method = cfg.functions.sigmoid_tanh_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         ltz = self._ltz()
         sgn = 1 - 2 * ltz
         abs = sgn * self
@@ -811,7 +813,7 @@ def sigmoid(self):
         check = abs < 2**cfg.functions.sigmoid_lut_max_bits - 1
         return limit + check * (eval - limit)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.sigmoid_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.sigmoid_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
@@ -880,7 +882,7 @@ def tanh(self):
     method = cfg.functions.sigmoid_tanh_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         sgn = self.sign()
         abs = sgn * self
         if method == "haar":
@@ -900,7 +902,7 @@ def tanh(self):
         check = abs < 2**cfg.functions.tanh_lut_max_bits -1
         return sgn * (1-check + lut * check)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.tanh_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.tanh_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.sigmoid_tanh_haar_size_bits
@@ -971,7 +973,7 @@ def erf(self):
     method = cfg.functions.erf_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         sgn = self.sign()
         abs = sgn * self
         if method == "haar":
@@ -991,7 +993,7 @@ def erf(self):
         check = abs < 2**cfg.functions.erf_lut_max_bits - 1
         return sgn * (1-check + lut * check)
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.erf_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.erf_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.erf_haar_size_bits
@@ -1027,7 +1029,7 @@ def gelu(self):
     method = cfg.functions.gelu_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         sgn = self.sign()
         abs = sgn * self
         drelu = 1 - self._ltz()
@@ -1049,7 +1051,7 @@ def gelu(self):
         check = abs < 2**cfg.functions.gelu_lut_max_bits
         return relu - lut * check
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT for gelu
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.gelu_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.gelu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.gelu_haar_size_bits
@@ -1079,7 +1081,7 @@ def silu(self):
     method = cfg.functions.silu_method
 
     if method in ("haar", "bior"):
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         sgn = self.sign()
         abs = sgn * self
         drelu = 1 - self._ltz()
@@ -1101,7 +1103,7 @@ def silu(self):
         check = abs < 2**cfg.functions.silu_lut_max_bits - 1
         return relu - lut * check
     elif method in ("haar-lut-only", "bior-lut-only"): # using only LUT
-        luts = LookupTables()
+        luts = LookupTables(self.device)
         self = self + 2**(cfg.functions.silu_lut_max_bits)
         if method == "haar-lut-only":
             truncation = cfg.functions.silu_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.silu_haar_size_bits

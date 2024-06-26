@@ -128,7 +128,6 @@ class LLMs:
         )
 
 def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True, device=None):
-    device = torch.device(device)
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.

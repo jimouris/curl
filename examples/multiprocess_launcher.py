@@ -30,7 +30,7 @@ class MultiProcessLauncher:
         # Using multiple GPUs
         if fn_args.multi_gpu:
             assert (
-                fn_args.world_size <= torch.cuda.device_count()
+                fn_args.world_size < torch.cuda.device_count()
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
 
         self.processes = []
@@ -53,11 +53,9 @@ class MultiProcessLauncher:
 
         if crypten.mpc.ttp_required():
             if fn_args.multi_gpu:
-                ttp_device = torch.device(f"cuda:0")
+                ttp_device = torch.device(f"cuda:{world_size}")
             else:
                 ttp_device = device
-            new_args = copy.deepcopy(fn_args)
-            new_args.device = ttp_device
 
             ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
