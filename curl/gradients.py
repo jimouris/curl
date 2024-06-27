@@ -1994,6 +1994,8 @@ class AutogradLayerNorm(AutogradFunction):
                 inv_var = 1.0 / torch.sqrt(variance + eps)
             else:
                 inv_var = (variance + eps).inv_sqrt()
+                # var = (variance + eps).get_plain_text()
+                # inv_var = 1.0 / torch.sqrt(var)
 
         # reshape shape (C) to broadcastable (1, C, 1, +):
         # mean = mean.reshape(broadcast_shape)

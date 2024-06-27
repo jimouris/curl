@@ -12,7 +12,6 @@ import torch
 from curl.common.util import count_wraps
 from curl.config import cfg
 
-
 class IgnoreEncodings:
     """Context Manager to ignore tensor encodings"""
 
