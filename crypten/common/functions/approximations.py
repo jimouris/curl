@@ -171,11 +171,19 @@ class LookupTables:
                               "sqrt_bior")
 
         """Inv Sqrt LUT"""
-        if cfg.functions.inv_sqrt_method in ("haar", "bior", "haar-lut-only", "bior-lut-only"):
+        if cfg.functions.inv_sqrt_method in ("haar", "bior", "haar-lut-only", "bior-lut-only", "tailored_haar"):
             cls.generate_haar(cfg.functions.inv_sqrt_lut_max_bits,
                               cfg.functions.inv_sqrt_haar_size_bits,
                               lambda x: np.reciprocal(np.sqrt(x)),
                               "inv_sqrt_haar")
+            cls.generate_haar(cfg.functions.inv_sqrt_tailored_0_lut_max_bits,
+                              cfg.functions.inv_sqrt_tailored_0_haar_size_bits,
+                              lambda x: np.reciprocal(np.sqrt(x)),
+                              "inv_sqrt_tailored_haar_0")
+            cls.generate_haar(cfg.functions.inv_sqrt_tailored_1_lut_max_bits,
+                              cfg.functions.inv_sqrt_tailored_1_haar_size_bits,
+                              lambda x: np.reciprocal(np.sqrt(x)),
+                              "inv_sqrt_tailored_haar_1")
             cls.generate_bior(cfg.functions.inv_sqrt_lut_max_bits,
                               cfg.functions.inv_sqrt_bior_size_bits,
                               lambda x: np.reciprocal(np.sqrt(x)),
@@ -597,8 +605,8 @@ def inv_sqrt(self):
     iters = cfg.functions.sqrt_nr_iters
     method = cfg.functions.inv_sqrt_method
 
-    if method in ("haar", "bior"):
-        luts = LookupTables(self.device)
+    if method in ("haar", "bior", "tailored_haar"):
+        luts = LookupTables()
         if method == "haar":
             truncation = cfg.functions.inv_sqrt_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_haar_size_bits
             if cfg.encoder.trunc_method.lut == "crypten":
@@ -613,6 +621,19 @@ def inv_sqrt(self):
             else:
                 msb, lsb = self.egk_truncmod_pr(62, truncation)
             return msb.evaluate_bior_lut(luts.LUTs["inv_sqrt_bior"], lsb, truncation)
+        elif method == "tailored_haar":
+            truncation_0 = cfg.functions.inv_sqrt_tailored_0_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_tailored_0_haar_size_bits
+            truncation_1 = cfg.functions.inv_sqrt_tailored_1_lut_max_bits + cfg.encoder.precision_bits - cfg.functions.inv_sqrt_tailored_1_haar_size_bits
+            if cfg.encoder.trunc_method.lut == "crypten":
+                msb_0 = self.div(2**truncation_0)
+                msb_1 = self.div(2**truncation_1)
+            else:
+                msb_0 = self.egk_trunc_pr(62, truncation_0)
+                msb_1 = self.egk_trunc_pr(62, truncation_1)
+            y_0 = msb_0.evaluate_lut(luts.LUTs["inv_sqrt_tailored_haar_0"])
+            y_1 = msb_1.evaluate_lut(luts.LUTs["inv_sqrt_tailored_haar_1"])
+            b = self < 1
+            return b * y_0 + (1-b) * y_1
     elif method == "NR":
         # Initialize using decent approximation
         if initial is None:

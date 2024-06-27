@@ -45,15 +45,20 @@ functions:
   sqrt_method: "bior"
   sqrt_nr_iters: 3
   sqrt_nr_initial: null
-  sqrt_haar_size_bits: 6
-  sqrt_bior_size_bits: 9
-  sqrt_lut_max_bits: 6
+  sqrt_haar_size_bits: 7
+  sqrt_bior_size_bits: 7
+  sqrt_lut_max_bits: 8
 
   # inv_sqrt configuration
-  inv_sqrt_method: "bior"
-  inv_sqrt_haar_size_bits: 10
-  inv_sqrt_bior_size_bits: 10
-  inv_sqrt_lut_max_bits: 7
+  inv_sqrt_method: "tailored_haar"
+  # inv_sqrt_method: "haar"
+  inv_sqrt_haar_size_bits: 11
+  inv_sqrt_bior_size_bits: 11
+  inv_sqrt_lut_max_bits: 8
+  inv_sqrt_tailored_0_lut_max_bits: 0
+  inv_sqrt_tailored_0_haar_size_bits: 8
+  inv_sqrt_tailored_1_lut_max_bits: 8
+  inv_sqrt_tailored_1_haar_size_bits: 9
 
   # sigmoid / tanh configuration
   # sigmoid_tanh_method: "bior-lut-only"
