@@ -511,7 +511,7 @@ class ArithmeticSharedTensor:
         input = self.shallow_copy()
         input.share = protocol.egk_trunc_pr(input, l, m).share
         return input
-    
+
     def egk_truncmod_pr(self, l, m):
         divisor = self.egk_trunc_pr(l, m)
         with beaver.IgnoreEncodings([self, divisor]):
@@ -655,6 +655,7 @@ class ArithmeticSharedTensor:
         """Evaluate a embedding on the input tensor."""
         protocol = globals()[cfg.mpc.protocol]
         self.share = protocol.evaluate_embed(self, embed.share).share
+        self.encoder._precision_bits = embed.encoder._precision_bits
         return self
 
     def where(self, condition, y):
