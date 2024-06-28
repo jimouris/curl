@@ -10,11 +10,11 @@ import io
 import logging
 import unittest
 
-import crypten
+import curl
 import torch
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
-from crypten.nn import onnx_converter
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
+from curl.nn import onnx_converter
 from test.multiprocess_test_case import (
     get_random_test_tensor,
     MultiProcessTestCase,
@@ -71,7 +71,7 @@ class TestOnnxConverter:
         super().setUp()
         # We don't want the main process (rank -1) to initialize the communicator
         if self.rank >= 0:
-            crypten.init()
+            curl.init()
 
     """
     @unittest.skip("CrypTen no longer supports from_tensorflow")
@@ -162,11 +162,11 @@ class TestOnnxConverter:
                 saved_model_dir, None, None
             )
 
-            model_enc = crypten.nn.from_tensorflow(graph_def, inputs, outputs)
+            model_enc = curl.nn.from_tensorflow(graph_def, inputs, outputs)
 
             # encrypt model and run it
             model_enc.encrypt()
-            features_enc = crypten.cryptensor(features)
+            features_enc = curl.cryptensor(features)
             result_enc = model_enc(features_enc)
 
             # compare the results
@@ -206,13 +206,13 @@ class TestOnnxConverter:
         y_one_hot = onehot(y_orig, num_targets=2)
 
         # encrypt training sample:
-        x_train = crypten.cryptensor(x_orig, requires_grad=True)
-        y_train = crypten.cryptensor(y_one_hot)
+        x_train = curl.cryptensor(x_orig, requires_grad=True)
+        y_train = curl.cryptensor(y_one_hot)
         dummy_input = torch.empty((1, 1, 28, 28))
 
         for loss_name in ["BCELoss", "CrossEntropyLoss"]:
             # create encrypted model
-            model = crypten.nn.from_pytorch(model_plaintext, dummy_input)
+            model = curl.nn.from_pytorch(model_plaintext, dummy_input)
             model.train()
             model.encrypt()
 
@@ -245,11 +245,11 @@ class TestOnnxConverter:
         # y is a linear combo of features 1 and 3
         y_orig = 2 * x_orig[:, 0] + 3 * x_orig[:, 2]
 
-        x_train = crypten.cryptensor(x_orig, requires_grad=True)
-        y_train = crypten.cryptensor(y_orig.unsqueeze(-1))
+        x_train = curl.cryptensor(x_orig, requires_grad=True)
+        y_train = curl.cryptensor(y_orig.unsqueeze(-1))
 
         # create encrypted model
-        model = crypten.nn.from_pytorch(model_plaintext, dummy_input)
+        model = curl.nn.from_pytorch(model_plaintext, dummy_input)
         model.train()
         model.encrypt()
 
@@ -261,7 +261,7 @@ class TestOnnxConverter:
     ):
         """Verifies gradient updates and loss decreases during training"""
         # create loss function
-        loss = getattr(crypten.nn, loss_name)()
+        loss = getattr(curl.nn, loss_name)()
 
         for i in range(num_epochs):
             output = model(x_train)
@@ -332,7 +332,7 @@ class TestOnnxConverter:
             node = Node(op_type)
             operator = onnx_converter._get_operator_class(node.op_type, {})
             self.assertTrue(
-                issubclass(operator, crypten.nn.Module),
+                issubclass(operator, curl.nn.Module),
                 f"{op_type} operator class {operator} is not a CrypTen module.",
             )
         # check conv
@@ -386,11 +386,11 @@ class TestOnnxConverter:
 
         model = Net()
         x = torch.ones(2, 2)
-        x_enc = crypten.cryptensor(x)
+        x_enc = curl.cryptensor(x)
         y = model(x)
         model_crypten = onnx_converter.from_pytorch(model, torch.empty(x.shape))
 
-        model_crypten.encrypt()
+        model_curl.encrypt()
         y_enc = model_crypten(x_enc)
         self.assertTrue(y_enc.shape == y.shape)
 

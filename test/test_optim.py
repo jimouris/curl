@@ -8,16 +8,16 @@
 import itertools
 import logging
 
-import crypten
+import curl
 import torch
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 
 
 class TestOptim:
     """
-    This class tests the crypten.optim package.
+    This class tests the curl.optim package.
     """
 
     def _check(self, encrypted_tensor, reference, msg, tolerance=None):
@@ -56,7 +56,7 @@ class TestOptim:
             get_random_test_tensor(size=torch_model.bias.size(), is_float=True)
         )
 
-        crypten_model = crypten.nn.Linear(10, 2)
+        crypten_model = curl.nn.Linear(10, 2)
         crypten_model.set_parameter("weight", torch_model.weight)
         crypten_model.set_parameter("bias", torch_model.bias)
         crypten_model.encrypt()
@@ -74,17 +74,17 @@ class TestOptim:
 
             if nesterov and (momentum <= 0 or dampening != 0):
                 with self.assertRaises(ValueError):
-                    crypten.optim.SGD(crypten_model.parameters(), **kwargs)
+                    curl.optim.SGD(crypten_model.parameters(), **kwargs)
                 continue
 
             torch_optimizer = torch.optim.SGD(torch_model.parameters(), **kwargs)
-            crypten_optimizer = crypten.optim.SGD(crypten_model.parameters(), **kwargs)
+            crypten_optimizer = curl.optim.SGD(crypten_model.parameters(), **kwargs)
 
             x = get_random_test_tensor(size=(10,), is_float=True)
             y = torch_model(x).sum()
             y.backward()
 
-            xx = crypten.cryptensor(x)
+            xx = curl.cryptensor(x)
             yy = crypten_model(xx).sum()
             yy.backward()
 

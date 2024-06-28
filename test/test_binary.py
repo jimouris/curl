@@ -9,10 +9,10 @@ import itertools
 import logging
 import unittest
 
-import crypten
+import curl
 import torch
-from crypten.common.tensor_types import is_int_tensor
-from crypten.mpc.primitives import BinarySharedTensor
+from curl.common.tensor_types import is_int_tensor
+from curl.mpc.primitives import BinarySharedTensor
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 
 
@@ -25,7 +25,7 @@ class TestBinary(MultiProcessTestCase):
         super().setUp()
         # We don't want the main process (rank -1) to initialize the communcator
         if self.rank >= 0:
-            crypten.init()
+            curl.init()
 
     def _check(self, encrypted_tensor, reference, msg, dst=None, tolerance=None):
         if tolerance is None:

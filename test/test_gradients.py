@@ -12,12 +12,12 @@ import logging
 import unittest
 from collections import namedtuple
 
-import crypten
+import curl
 import torch
 import torch.nn.functional as F
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
-from crypten.gradients import AutogradContext
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
+from curl.gradients import AutogradContext
 from test.multiprocess_test_case import (
     get_random_test_tensor,
     MultiProcessTestCase,
@@ -54,7 +54,7 @@ class TestGradients:
         super().setUp()
         # We don't want the main process (rank -1) to initialize the communicator
         if self.rank >= 0:
-            crypten.init()
+            curl.init()
 
     def _check(self, encrypted_tensor, reference, msg, tolerance=None):
         if tolerance is None:
@@ -100,7 +100,7 @@ class TestGradients:
 
         input = input_tensor.clone()
         input.requires_grad = True
-        input_encr = crypten.cryptensor(input, requires_grad=True)
+        input_encr = curl.cryptensor(input, requires_grad=True)
 
         crypten_kwargs = copy.deepcopy(kwargs)
         if addl_args is not None:
@@ -133,12 +133,12 @@ class TestGradients:
             grad_output = get_random_test_tensor(
                 max_value=2, size=reference.size(), is_float=True
             )
-            grad_output_encr = crypten.cryptensor(grad_output)
+            grad_output_encr = curl.cryptensor(grad_output)
             reference.backward(grad_output)
             encrypted_out.backward(grad_output_encr)
             self._check(input_encr.grad, input.grad, msg + " in backward")
             for i, arg_encr in enumerate(args_encr):
-                if crypten.is_encrypted_tensor(arg_encr):
+                if curl.is_encrypted_tensor(arg_encr):
                     self._check(arg_encr.grad, args[i].grad, msg + " in backward args")
 
     def _set_grad_to_zero(self, args, make_private=False):
@@ -152,7 +152,7 @@ class TestGradients:
 
         for arg in args:
             if is_float_tensor(arg) and make_private:
-                arg = crypten.cryptensor(arg, requires_grad=True)
+                arg = curl.cryptensor(arg, requires_grad=True)
             elif is_float_tensor(arg):
                 arg.requires_grad = True
                 arg.grad = None
@@ -359,7 +359,7 @@ class TestGradients:
         is ignored when a function is called with `inplace=True`
         """
         tensor = get_random_test_tensor(is_float=True)
-        encrypted = crypten.cryptensor(tensor)
+        encrypted = curl.cryptensor(tensor)
 
         functions = ["dropout", "_feature_dropout"]
         for func in functions:
@@ -605,7 +605,7 @@ class TestGradients:
         # check forward
         image = image.clone()
         image.requires_grad = True
-        image_enc = crypten.cryptensor(image, requires_grad=True)
+        image_enc = curl.cryptensor(image, requires_grad=True)
 
         out = torch.nn.functional.max_pool2d(
             image,
@@ -635,7 +635,7 @@ class TestGradients:
 
         # check backward
         grad_output = get_random_test_tensor(size=out.size(), is_float=True)
-        grad_output_enc = crypten.cryptensor(grad_output)
+        grad_output_enc = curl.cryptensor(grad_output)
         out.backward(grad_output)
         out_enc.backward(grad_output_enc)
 
@@ -661,7 +661,7 @@ class TestGradients:
         for size in SIZES:
             tensor = get_random_test_tensor(size=size, is_float=True)
             tensor.requires_grad = True
-            tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+            tensor_encr = curl.cryptensor(tensor, requires_grad=True)
 
             out = tensor.pow(2)
             out_encr = tensor_encr.square()
@@ -669,7 +669,7 @@ class TestGradients:
 
             grad_output = get_random_test_tensor(size=out.shape, is_float=True)
             out.backward(grad_output)
-            out_encr.backward(crypten.cryptensor(grad_output))
+            out_encr.backward(curl.cryptensor(grad_output))
             self._check(
                 tensor_encr.grad,
                 tensor.grad,
@@ -734,7 +734,7 @@ class TestGradients:
             self._check_forward_backward("clone", tensor)
 
     def test_cat_stack(self) -> None:
-        for module in [crypten, torch]:  # torch.cat on CrypTensor runs crypten.cat
+        for module in [crypten, torch]:  # torch.cat on CrypTensor runs curl.cat
             for func in ["cat", "stack"]:
                 for dimensions in range(1, 5):
                     size = [5] * dimensions
@@ -745,7 +745,7 @@ class TestGradients:
                                 for _ in range(num_tensors)
                             ]
                             encrypted_tensors = [
-                                crypten.cryptensor(t, requires_grad=True)
+                                curl.cryptensor(t, requires_grad=True)
                                 for t in tensors
                             ]
                             for i in range(len(tensors)):
@@ -767,7 +767,7 @@ class TestGradients:
                             grad_output = get_random_test_tensor(
                                 size=reference.size(), is_float=True
                             )
-                            encrypted_grad_output = crypten.cryptensor(grad_output)
+                            encrypted_grad_output = curl.cryptensor(grad_output)
 
                             reference.backward(grad_output)
                             encrypted_out.backward(encrypted_grad_output)
@@ -798,7 +798,7 @@ class TestGradients:
                             ]
                             tensor[index] = 0.0
 
-                        encr_tensor = crypten.cryptensor(tensor, requires_grad=True)
+                        encr_tensor = curl.cryptensor(tensor, requires_grad=True)
                         encr_tensor_out = getattr(encr_tensor, dropout_fn)(p=prob)
                         dropout_tensor = encr_tensor_out.get_plain_text()
 
@@ -826,7 +826,7 @@ class TestGradients:
 
                 # sample input data, weight, and bias:
                 tensor = get_random_test_tensor(size=size, is_float=True)
-                encrypted_input = crypten.cryptensor(tensor)
+                encrypted_input = curl.cryptensor(tensor)
                 C = size[1]
                 weight = get_random_test_tensor(size=[C], max_value=1, is_float=True)
                 bias = get_random_test_tensor(size=[C], max_value=1, is_float=True)
@@ -840,8 +840,8 @@ class TestGradients:
                 # dummy running mean and variance:
                 running_mean = tensor.mean(stats_dimensions).detach()
                 running_var = tensor.var(stats_dimensions).detach()
-                enc_running_mean = crypten.cryptensor(running_mean)
-                enc_running_var = crypten.cryptensor(running_var)
+                enc_running_mean = curl.cryptensor(running_mean)
+                enc_running_var = curl.cryptensor(running_var)
 
                 # compute reference output:
                 tensor.requires_grad = True
@@ -857,8 +857,8 @@ class TestGradients:
                 # compute CrypTen output:
                 encrypted_input.requires_grad = True
                 ctx = AutogradContext()
-                batch_norm_fn = crypten.gradients.get_grad_fn("batchnorm")
-                with crypten.no_grad():
+                batch_norm_fn = curl.gradients.get_grad_fn("batchnorm")
+                with curl.no_grad():
                     encrypted_out = batch_norm_fn.forward(
                         ctx,
                         encrypted_input,
@@ -883,8 +883,8 @@ class TestGradients:
                     size=reference.size(), is_float=True
                 )
                 reference.backward(grad_input)
-                with crypten.no_grad():
-                    enc_grad_input = crypten.cryptensor(grad_input)
+                with curl.no_grad():
+                    enc_grad_input = curl.cryptensor(grad_input)
                     encrypted_grad = batch_norm_fn.backward(ctx, enc_grad_input)
                 TorchGrad = namedtuple("TorchGrad", ["name", "value"])
                 torch_gradients = [
@@ -926,20 +926,20 @@ class TestGradients:
 
                     target = get_random_test_tensor(size=(batch_size,), is_float=True)
                     target = target.gt(0.0).float()
-                    target_encr = crypten.cryptensor(target)
+                    target_encr = curl.cryptensor(target)
                 else:
                     tensor = get_random_test_tensor(size=size, is_float=True)
                     target = get_random_test_tensor(
                         size=(batch_size,), max_value=num_targets - 1
                     )
                     target = onehot(target.abs(), num_targets=num_targets)
-                    target_encr = crypten.cryptensor(target)
+                    target_encr = curl.cryptensor(target)
                     # CrypTen, unlike PyTorch, uses one-hot targets
                     target = target.argmax(1)
 
                 # forward
                 tensor.requires_grad = True
-                tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+                tensor_encr = curl.cryptensor(tensor, requires_grad=True)
                 reference = getattr(torch.nn.functional, loss)(tensor, target)
                 out_encr = getattr(tensor_encr, loss)(
                     target_encr, skip_forward=skip_forward
@@ -963,11 +963,11 @@ class TestGradients:
 
                 target = get_random_test_tensor(size=size, is_float=True)
                 target = target.gt(0.0).float()
-                target_encr = crypten.cryptensor(target)
+                target_encr = curl.cryptensor(target)
 
                 # forward
                 tensor.requires_grad = True
-                tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+                tensor_encr = curl.cryptensor(tensor, requires_grad=True)
 
                 reference = tensor.sigmoid()
                 reference = alpha * reference + (1 - alpha) * (1 - reference)
@@ -1048,7 +1048,7 @@ class TestGradients:
                 index = torch.tensor(index).reshape(tensor.shape)
 
                 tensor.requires_grad = True
-                tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+                tensor_encr = curl.cryptensor(tensor, requires_grad=True)
 
                 if func == "gather":
                     reference = getattr(tensor, func)(dim, index)
@@ -1063,7 +1063,7 @@ class TestGradients:
                 )
 
                 grad_out = get_random_test_tensor(size=reference.shape, is_float=True)
-                grad_out_encr = crypten.cryptensor(grad_out)
+                grad_out_encr = curl.cryptensor(grad_out)
                 reference.backward(grad_out)
                 out_encr.backward(grad_out_encr)
 
@@ -1158,7 +1158,7 @@ class TestGradients:
             # ensure base is positive for pos_pow
             tensor = get_random_test_tensor(is_float=True, max_value=2) + 4
             tensor.requires_grad = True
-            tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+            tensor_encr = curl.cryptensor(tensor, requires_grad=True)
 
             reference = tensor.pow(power)
             out_encr = tensor_encr.pos_pow(power)
@@ -1167,7 +1167,7 @@ class TestGradients:
             )
 
             grad_out = get_random_test_tensor(is_float=True)
-            grad_out_encr = crypten.cryptensor(grad_out)
+            grad_out_encr = curl.cryptensor(grad_out)
             reference.backward(grad_out)
             out_encr.backward(grad_out_encr)
 
@@ -1182,7 +1182,7 @@ class TestGradients:
             for encrypt_coeffs in [False, True]:
                 tensor = get_random_test_tensor(is_float=True)
                 tensor.requires_grad = True
-                tensor_encr = crypten.cryptensor(tensor, requires_grad=True)
+                tensor_encr = curl.cryptensor(tensor, requires_grad=True)
 
                 coeffs_size = (terms,)
                 coeffs = get_random_test_tensor(size=coeffs_size, is_float=True)
@@ -1195,12 +1195,12 @@ class TestGradients:
                     .view(tensor.size())
                 )
                 if encrypt_coeffs:
-                    coeffs = crypten.cryptensor(coeffs)
+                    coeffs = curl.cryptensor(coeffs)
                 out_encr = tensor_encr.polynomial(coeffs)
                 self._check(out_encr, reference, "polynomial forward failed")
 
                 grad_out = get_random_test_tensor(size=reference.size(), is_float=True)
-                grad_out_encr = crypten.cryptensor(grad_out)
+                grad_out_encr = curl.cryptensor(grad_out)
                 reference.backward(grad_out)
                 out_encr.backward(grad_out_encr)
                 self._check(
@@ -1236,13 +1236,13 @@ class TestTTP(MultiProcessTestCase, TestGradients):
 class TestPTT(unittest.TestCase, TestGradients):
     def setUp(self) -> None:
         self.default_tolerance = 0.5
-        self._original_backend = crypten.get_default_cryptensor_type()
-        crypten.set_default_cryptensor_type("ptt")
+        self._original_backend = curl.get_default_cryptensor_type()
+        curl.set_default_cryptensor_type("ptt")
         super(TestPTT, self).setUp()
-        crypten.init()
+        curl.init()
 
     def tearDown(self) -> None:
-        crypten.set_default_cryptensor_type(self._original_backend)
+        curl.set_default_cryptensor_type(self._original_backend)
         super(TestPTT, self).setUp()
 
 

@@ -1,4 +1,4 @@
-<p align="center"><img width="70%" src="https://github.com/jimouris/curl/blob/main/docs/_static/img/Curl.png" alt="Curl logo" /></p>
+<p align="center"><img width="70%" src="https://github.com/jimouris/curl/blob/main/Curl.png" alt="Curl logo" /></p>
 
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jimouris/curl/blob/main/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/jimouris/curl/blob/main/CONTRIBUTING.md)

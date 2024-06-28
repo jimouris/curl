@@ -6,7 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from crypten import CrypTensor, register_cryptensor
+from curl import CrypTensor, register_cryptensor
 
 
 @register_cryptensor("ptt")

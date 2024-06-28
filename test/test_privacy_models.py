@@ -9,11 +9,11 @@ import copy
 import itertools
 import logging
 
-import crypten
+import curl
 import torch
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
-from crypten.nn.privacy import DPSplitModel, SkippedLoss
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
+from curl.nn.privacy import DPSplitModel, SkippedLoss
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 
 
@@ -157,7 +157,7 @@ class TestPrivacyModels(MultiProcessTestCase):
             # TODO: Write code to generate labels for CrossEntropyLoss
             labels = get_random_test_tensor(2, 0, logits.size(), is_float=False)
             labels = labels.float()
-            labels_enc = crypten.cryptensor(labels, src=LABEL_SRC)
+            labels_enc = curl.cryptensor(labels, src=LABEL_SRC)
 
             # Compute reference loss
             loss = loss_pt(logits, labels)

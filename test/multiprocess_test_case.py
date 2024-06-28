@@ -14,11 +14,11 @@ import unittest
 import warnings
 from functools import wraps
 
-import crypten.communicator as comm
-import crypten.debug
+import curl.communicator as comm
+import curl.debug
 import torch
 import torch.distributed as dist
-from crypten.config import cfg
+from curl.config import cfg
 
 
 def get_random_test_tensor(
@@ -120,7 +120,7 @@ class MultiProcessTestCase(unittest.TestCase):
     def setUp(self, world_size=DEFAULT_WORLD_SIZE):
         super(MultiProcessTestCase, self).setUp()
 
-        crypten.debug.configure_logging()
+        curl.debug.configure_logging()
 
         self.world_size = world_size
         self.default_tolerance = 0.5
@@ -131,7 +131,7 @@ class MultiProcessTestCase(unittest.TestCase):
         if self.rank == self.MAIN_PROCESS_RANK:
             self.file = tempfile.NamedTemporaryFile(delete=True).name
             self.processes = [self._spawn_process(rank) for rank in range(world_size)]
-            if crypten.mpc.ttp_required():
+            if curl.mpc.ttp_required():
                 self.processes += [self._spawn_ttp()]
 
     def tearDown(self):
@@ -147,7 +147,7 @@ class MultiProcessTestCase(unittest.TestCase):
     def _spawn_ttp_process_with_config(config):
         """Runs TTPServer with config copied from parent"""
         cfg.set_config(config)
-        crypten.mpc.provider.TTPServer()
+        curl.mpc.provider.TTPServer()
 
     def _spawn_ttp(self):
         communicator_args = {
@@ -200,7 +200,7 @@ class MultiProcessTestCase(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
-                crypten.init()
+                curl.init()
             except BaseException:
                 tb_string = traceback.format_exc()
                 exception_queue.put(tb_string)
@@ -213,7 +213,7 @@ class MultiProcessTestCase(unittest.TestCase):
         except BaseException:
             tb_string = traceback.format_exc()
             exception_queue.put(tb_string)
-        crypten.uninit()
+        curl.uninit()
         sys.exit(0)
 
     def _join_processes(self, fn):

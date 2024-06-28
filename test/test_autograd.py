@@ -9,12 +9,12 @@ import logging
 import random
 import unittest
 
-import crypten
-import crypten.gradients as gradients
+import curl
+import curl.gradients as gradients
 import torch
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
-from crypten.gradients import AutogradContext, AutogradFunction
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
+from curl.gradients import AutogradContext, AutogradFunction
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 
 
@@ -26,7 +26,7 @@ class TestAutograd:
     def setUp(self):
         # we do not want main process (rank -1) initializing the communicator:
         if self.rank >= 0:
-            crypten.init()
+            curl.init()
 
     def _check(self, encrypted_tensor, reference, msg, tolerance=None):
         if tolerance is None:
@@ -55,7 +55,7 @@ class TestAutograd:
 
         # generate random inputs:
         inputs = [get_random_test_tensor(is_float=True) for _ in range(5)]
-        inputs = [crypten.cryptensor(input) for input in inputs]
+        inputs = [curl.cryptensor(input) for input in inputs]
         ctx = AutogradContext()
 
         # repeat test multiple times:
@@ -93,7 +93,7 @@ class TestAutograd:
 
         # behavior of max_pool2d in which indices are returned:
         input = get_random_test_tensor(size=(1, 3, 8, 8), is_float=True)
-        input = crypten.cryptensor(input, requires_grad=True)
+        input = curl.cryptensor(input, requires_grad=True)
         reference = [True, True, False]
         outputs = [None] * 3
         outputs[0] = input.max_pool2d(2, return_indices=False)
@@ -113,7 +113,7 @@ class TestAutograd:
         value = 1.5
         reference = get_random_test_tensor(size=(1, 3, 8, 8), is_float=True)
         for requires_grad in [False, True]:
-            result = crypten.cryptensor(reference, requires_grad=requires_grad)
+            result = curl.cryptensor(reference, requires_grad=requires_grad)
             if requires_grad:
                 with self.assertRaises(RuntimeError):
                     result.add_(value)
@@ -158,7 +158,7 @@ class TestAutograd:
         for dimension in range(0, 4):
             tensor = get_random_test_tensor(size=tensor_size, is_float=True)
             ref_forward = torch.from_numpy(tensor.numpy().take(index, dimension))
-            encrypted_tensor = crypten.cryptensor(tensor)
+            encrypted_tensor = curl.cryptensor(tensor)
             encr_inputs = [encrypted_tensor, index, dimension]
 
             # test forward
@@ -193,8 +193,8 @@ class TestAutograd:
             input_size = (12, 5)
             input1 = get_random_test_tensor(size=input_size, is_float=True)
             input2 = get_random_test_tensor(size=input_size, is_float=True)
-            input1 = crypten.cryptensor(input1, requires_grad=True)
-            input2 = crypten.cryptensor(input2, requires_grad=True)
+            input1 = curl.cryptensor(input1, requires_grad=True)
+            input2 = curl.cryptensor(input2, requires_grad=True)
 
             # perform forward computation with detach in the middle:
             intermediate = input1.add(1.0)
@@ -216,7 +216,7 @@ class TestAutograd:
 
             # get test case:
             input = get_random_test_tensor(size=(12, 5), is_float=True)
-            input = crypten.cryptensor(input, requires_grad=requires_grad)
+            input = curl.cryptensor(input, requires_grad=requires_grad)
 
             # perform forward computation:
             output = input.exp().sum()
@@ -286,7 +286,7 @@ class TestAutograd:
             encr_intermediate2 = encr_input.add(2.0).square()
             encr_intermediate3 = encr_input.pow(2.0)
             encr_output = (
-                crypten.cat(
+                curl.cat(
                     [encr_intermediate1, encr_intermediate2, encr_intermediate3]
                 )
                 .mul(0.5)
@@ -306,7 +306,7 @@ class TestAutograd:
             )  # CrypTen
             encr_intermediate2 = encr_input.gather(0, idx2).gather(1, idx3).add(-2.0)
             encr_output = (
-                crypten.cat([encr_intermediate1, encr_intermediate2], dim=0)
+                curl.cat([encr_intermediate1, encr_intermediate2], dim=0)
                 .mul(0.5)
                 .sum()
             )
@@ -332,10 +332,10 @@ class TestAutograd:
             output = torch.cat([input, intermediate2, intermediate3]).add(-1).sum()
 
             encr_intermediate1 = encr_input.add(3.0)
-            encr_intermediate2 = crypten.cat([encr_input, encr_intermediate1])
+            encr_intermediate2 = curl.cat([encr_input, encr_intermediate1])
             encr_intermediate3 = encr_intermediate2.pow(2.0)
             encr_output = (
-                crypten.cat([encr_input, encr_intermediate2, encr_intermediate3])
+                curl.cat([encr_input, encr_intermediate2, encr_intermediate3])
                 .add(-1)
                 .sum()
             )
@@ -347,9 +347,9 @@ class TestAutograd:
             intermediate2 = intermediate1.mean(0, keepdim=True)
             output = torch.cat([intermediate2, intermediate1], dim=0).sum()
 
-            encr_intermediate1 = crypten.cat([encr_input, encr_input])
+            encr_intermediate1 = curl.cat([encr_input, encr_input])
             encr_intermediate2 = encr_intermediate1.mean(0, keepdim=True)
-            encr_output = crypten.cat([encr_intermediate2, encr_intermediate1]).sum()
+            encr_output = curl.cat([encr_intermediate2, encr_intermediate1]).sum()
 
             return output, encr_output
 
@@ -364,7 +364,7 @@ class TestAutograd:
             # get input tensors:
             input = get_random_test_tensor(size=(12, 5), is_float=True)
             input.requires_grad = True
-            encr_input = crypten.cryptensor(input, requires_grad=True)
+            encr_input = curl.cryptensor(input, requires_grad=True)
 
             # perform multiple forward computations on input that get combined:
             output, encr_output = test_case(input, encr_input)
@@ -389,7 +389,7 @@ class TestAutograd:
             # get input tensors:
             input = get_random_test_tensor(size=(12, 5), is_float=True)
             input.requires_grad = True
-            encr_input = crypten.cryptensor(input, requires_grad=True)
+            encr_input = curl.cryptensor(input, requires_grad=True)
 
             # perform forward-backward pass:
             output = getattr(input, func_name)(input).sum()
@@ -420,7 +420,7 @@ class TestAutograd:
                 get_random_test_tensor(size=(12, 5), is_float=True)
                 for _ in range(number_of_inputs)
             ]
-            encr_inputs = [crypten.cryptensor(input) for input in inputs]
+            encr_inputs = [curl.cryptensor(input) for input in inputs]
 
             # get autograd variables:
             for input in inputs:
@@ -468,7 +468,7 @@ class TestAutograd:
         # create test case:
         input = get_random_test_tensor(size=(12, 5), is_float=True)
         input.requires_grad = True
-        encr_input = crypten.cryptensor(input, requires_grad=True)
+        encr_input = curl.cryptensor(input, requires_grad=True)
 
         # re-use the same input multiple times:
         for _ in range(7):

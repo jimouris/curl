@@ -10,7 +10,7 @@ import unittest
 
 # from test.multiprocess_test_case import get_random_test_tensor
 
-import crypten
+import curl
 import torch
 import torchvision
 from test.multiprocess_test_case import MultiProcessTestCase
@@ -18,7 +18,7 @@ from test.multiprocess_test_case import MultiProcessTestCase
 
 class TestModels(MultiProcessTestCase):
     """
-    This class tests the crypten.models package.
+    This class tests the curl.models package.
     """
 
     __PRETRAINED_UNAVAILABLE = [
@@ -30,7 +30,7 @@ class TestModels(MultiProcessTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        crypten.init()
+        curl.init()
 
     def _check_modules(self, crypten_model, torchvision_model, msg):
         msg += " in modules."
@@ -68,7 +68,7 @@ class TestModels(MultiProcessTestCase):
 
             self.assertEqual(crypten_param.size(), torchvision_param.size(), msg)
             if pretrained:
-                if isinstance(crypten_param, crypten.CrypTensor):
+                if isinstance(crypten_param, curl.CrypTensor):
                     crypten_param = crypten_param.get_plain_text()
                 self.assertTrue(
                     torch.allclose(crypten_param, torchvision_param, atol=1e-4)
@@ -86,7 +86,7 @@ class TestModels(MultiProcessTestCase):
                 crypten_param.size(), torchvision_param.size(), f"{msg}: {name} size"
             )
             if pretrained:
-                if isinstance(crypten_param, crypten.CrypTensor):
+                if isinstance(crypten_param, curl.CrypTensor):
                     crypten_param = crypten_param.get_plain_text()
                 self.assertTrue(
                     torch.allclose(crypten_param, torchvision_param, atol=1e-4),
@@ -94,12 +94,12 @@ class TestModels(MultiProcessTestCase):
                 )
 
     def _check_model(self, model_name, *args, **kwargs):
-        crypten_model = getattr(crypten.models, model_name)(*args, **kwargs)
+        crypten_model = getattr(curl.models, model_name)(*args, **kwargs)
         torchvision_model = getattr(torchvision.models, model_name)(*args, **kwargs)
 
         self.assertTrue(
-            isinstance(crypten_model, crypten.nn.Module),
-            f"{model_name} crypten model is not a crypten.nn.Module",
+            isinstance(crypten_model, curl.nn.Module),
+            f"{model_name} crypten model is not a curl.nn.Module",
         )
         self.assertTrue(
             isinstance(torchvision_model, torch.nn.Module),
@@ -124,7 +124,7 @@ class TestModels(MultiProcessTestCase):
         # input = get_random_test_tensor(size=(1, 3, 224, 224), is_float=True)
         # output = torchvision_model(input)
 
-        # encr_input = crypten.cryptensor(input)
+        # encr_input = curl.cryptensor(input)
         # encr_output = crypten_model(encr_input)
         # self._check(encr_output, output, f"{model_name} model forward failed")
 

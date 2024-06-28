@@ -8,7 +8,7 @@
 import logging
 import time
 
-import crypten
+import curl
 import torch
 from examples.meters import AverageMeter
 
@@ -29,11 +29,11 @@ def train_linear_svm(features, labels, epochs=50, lr=0.5, print_time=False):
         # Compute accuracy
         correct = label_predictions.mul(labels)
         accuracy = correct.add(1).div(2).mean()
-        if crypten.is_encrypted_tensor(accuracy):
+        if curl.is_encrypted_tensor(accuracy):
             accuracy = accuracy.get_plain_text()
 
         # Print Accuracy once
-        if crypten.communicator.get().get_rank() == 0:
+        if curl.communicator.get().get_rank() == 0:
             print(
                 f"Epoch {epoch} --- Training Accuracy %.2f%%" % (accuracy.item() * 100)
             )
@@ -61,14 +61,14 @@ def evaluate_linear_svm(features, labels, w, b):
     predictions = w.matmul(features).add(b).sign()
     correct = predictions.mul(labels)
     accuracy = correct.add(1).div(2).mean().get_plain_text()
-    if crypten.communicator.get().get_rank() == 0:
+    if curl.communicator.get().get_rank() == 0:
         print("Test accuracy %.2f%%" % (accuracy.item() * 100))
 
 
 def run_mpc_linear_svm(
     epochs=50, examples=50, features=100, lr=0.5, skip_plaintext=False
 ):
-    crypten.init()
+    curl.init()
 
     # Set random seed for reproducibility
     torch.manual_seed(1)
@@ -87,8 +87,8 @@ def run_mpc_linear_svm(
         w_torch, b_torch = train_linear_svm(x, y, lr=lr, print_time=True)
 
     # Encrypt features / labels
-    x = crypten.cryptensor(x)
-    y = crypten.cryptensor(y)
+    x = curl.cryptensor(x)
+    y = curl.cryptensor(y)
 
     logging.info("==================")
     logging.info("CrypTen Training")

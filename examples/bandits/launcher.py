@@ -430,9 +430,9 @@ def _run_experiment(args):
         import private_contextual_bandits as bandits
 
     learner_func = build_learner(args, bandits, download_mnist)
-    import crypten
+    import curl
 
-    crypten.init()
+    curl.init()
     learner_func()
 
 

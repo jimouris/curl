@@ -34,8 +34,8 @@ import os
 import timeit
 from collections import namedtuple
 
-import crypten
-import crypten.communicator as comm
+import curl
+import curl.communicator as comm
 import numpy as np
 import pandas as pd
 import torch
@@ -141,7 +141,7 @@ class FuncBenchmarks:
             torch.rand(self.tensor_size, device=self.device)*5 + 1,
             torch.rand(self.tensor_size, device=self.device)*5 + 1,
         )
-        x_enc, y_enc = crypten.cryptensor(x), crypten.cryptensor(y)
+        x_enc, y_enc = curl.cryptensor(x), curl.cryptensor(y)
 
         runtimes, runtimes_enc = [], []
 
@@ -189,8 +189,8 @@ class FuncBenchmarks:
         filter_size = [size // 10 for size in self.tensor_size]
         x_conv2d = torch.rand(1, 1, *self.tensor_size, device=self.device)
         weight2d = torch.rand(1, 1, *filter_size, device=self.device)
-        x_conv2d_enc = crypten.cryptensor(x_conv2d)
-        weight2d_enc = crypten.cryptensor(weight2d)
+        x_conv2d_enc = curl.cryptensor(x_conv2d)
+        weight2d_enc = curl.cryptensor(weight2d)
         return x_conv2d, x_conv2d_enc, weight2d, weight2d_enc
 
     def random_conv1d_inputs(self):
@@ -199,8 +199,8 @@ class FuncBenchmarks:
         filter_size = size // 10
         (x_conv1d,) = torch.rand(1, 1, size, device=self.device)
         weight1d = torch.rand(1, 1, filter_size, device=self.device)
-        x_conv1d_enc = crypten.cryptensor(x_conv1d)
-        weight1d_enc = crypten.cryptensor(weight1d)
+        x_conv1d_enc = curl.cryptensor(x_conv1d)
+        weight1d_enc = curl.cryptensor(weight1d)
         return x_conv1d, x_conv1d_enc, weight1d, weight1d_enc
 
     @staticmethod
@@ -241,8 +241,8 @@ class FuncBenchmarks:
                 TRUNCATED_DOMAIN.to(device=self.device),
             )
         y = torch.rand(DOMAIN.shape, device=self.device)
-        DOMAIN_enc, y_enc = crypten.cryptensor(DOMAIN), crypten.cryptensor(y)
-        TRUNCATED_DOMAIN_enc = crypten.cryptensor(TRUNCATED_DOMAIN)
+        DOMAIN_enc, y_enc = curl.cryptensor(DOMAIN), curl.cryptensor(y)
+        TRUNCATED_DOMAIN_enc = curl.cryptensor(TRUNCATED_DOMAIN)
 
         if func in ["exp", "cos", "sin"]:
             ref, out_enc = (
@@ -390,8 +390,8 @@ class ModelBenchmarks:
 
         Args:
             model (CrypTen model): model to be trained
-            x (crypten.tensor): inputs
-            y (crypten.tensor): targets
+            x (curl.tensor): inputs
+            y (curl.tensor): targets
             epochs (int): number of training epochs
             lr (float): learning rate
             loss (str): type of loss to use for training
@@ -399,8 +399,8 @@ class ModelBenchmarks:
         Returns:
             model with update weights
         """
-        assert isinstance(model, crypten.nn.Module), "must be a CrypTen model"
-        criterion = getattr(crypten.nn, loss)()
+        assert isinstance(model, curl.nn.Module), "must be a CrypTen model"
+        criterion = getattr(curl.nn, loss)()
 
         for _ in range(epochs):
             model.zero_grad()
@@ -427,13 +427,13 @@ class ModelBenchmarks:
 
             if model.advanced:
                 y = model.data.y_onehot.to(self.device)
-            x_enc = crypten.cryptensor(x)
-            y_enc = crypten.cryptensor(y)
+            x_enc = curl.cryptensor(x)
+            y_enc = curl.cryptensor(y)
 
             model_crypten = model.crypten
             if hasattr(model_crypten, "to"):
-                model_crypten = model_crypten.to(self.device)
-            model_enc = model_crypten.encrypt()
+                model_crypten = model_curl.to(self.device)
+            model_enc = model_curl.encrypt()
             runtime_enc, _ = self.train_crypten(
                 model_enc, x_enc, y_enc, 1, model.lr, model.loss
             )
@@ -461,10 +461,10 @@ class ModelBenchmarks:
 
             model_crypten = model.crypten
             if hasattr(model_crypten, "to"):
-                model_crypten = model_crypten.to(self.device)
-            model_enc = model_crypten.encrypt()
+                model_crypten = model_curl.to(self.device)
+            model_enc = model_curl.encrypt()
 
-            x_enc = crypten.cryptensor(x)
+            x_enc = curl.cryptensor(x)
             runtime_enc, _ = self.predict(model_enc, x_enc)
             runtimes_enc.append(runtime_enc)
 
@@ -508,20 +508,20 @@ class ModelBenchmarks:
 
             model_crypten = model.crypten
             if hasattr(model_crypten, "to"):
-                model_crypten = model_crypten.to(self.device)
-            model_crypten = model_crypten.encrypt()
+                model_crypten = model_curl.to(self.device)
+            model_crypten = model_curl.encrypt()
             if model.advanced:
                 y = model.data.y_onehot.to(self.device)
-            x_enc = crypten.cryptensor(x)
-            y_enc = crypten.cryptensor(y)
+            x_enc = curl.cryptensor(x)
+            y_enc = curl.cryptensor(y)
             _, model_crypten = self.train_crypten(
                 model_crypten, x_enc, y_enc, model.epochs, model.lr, model.loss
             )
-            x_test_enc = crypten.cryptensor(x_test)
+            x_test_enc = curl.cryptensor(x_test)
 
             output = model_crypten(x_test_enc).get_plain_text()
             accuracy = ModelBenchmarks.calc_accuracy(output, y_test)
-            accuracies_crypten.append(accuracy)
+            accuracies_curl.append(accuracy)
 
         return accuracies, accuracies_crypten
 
@@ -654,11 +654,11 @@ def multiprocess_caller(args):
 
 def main():
     """Runs benchmarks and saves if path is provided"""
-    crypten.init()
+    curl.init()
     args = get_args()
     device = torch.device(args.device)
 
-    if not hasattr(crypten.nn.Module, "to") or not hasattr(crypten.mpc.MPCTensor, "to"):
+    if not hasattr(curl.nn.Module, "to") or not hasattr(curl.mpc.MPCTensor, "to"):
         if device.type == "cuda":
             print(
                 "GPU computation is not supported for this version of CrypTen, benchmark will be skipped"
@@ -675,7 +675,7 @@ def main():
 
     if args.world_size > 1:
         if args.ttp:
-            crypten.mpc.set_default_provider(crypten.mpc.provider.TrustedThirdParty)
+            curl.mpc.set_default_provider(curl.mpc.provider.TrustedThirdParty)
         launcher = multiprocess_launcher.MultiProcessLauncher(
             args.world_size, multiprocess_caller, fn_args=args
         )

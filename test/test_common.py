@@ -8,11 +8,11 @@
 import sys
 import unittest
 
-import crypten
+import curl
 import torch
-from crypten.common.util import chebyshev_series
-from crypten.config import cfg
-from crypten.encoder import FixedPointEncoder, nearest_integer_division
+from curl.common.util import chebyshev_series
+from curl.config import cfg
+from curl.encoder import FixedPointEncoder, nearest_integer_division
 
 
 def get_test_tensor(max_value=10, float=False):
@@ -49,10 +49,10 @@ class TestCommon(unittest.TestCase):
 
         # Make sure encoding a subclass of CrypTensor is a no-op
         cfg.mpc.provider = "TFP"
-        crypten.init()
+        curl.init()
 
         tensor = get_test_tensor(float=True)
-        encrypted_tensor = crypten.cryptensor(tensor)
+        encrypted_tensor = curl.cryptensor(tensor)
         encrypted_tensor = fpe.encode(encrypted_tensor)
         self._check(
             encrypted_tensor.get_plain_text(),
@@ -102,7 +102,7 @@ class TestCommon(unittest.TestCase):
     def test_config(self) -> None:
         """Checks setting configuartion with config manager works"""
         # Set the config directly
-        crypten.init()
+        curl.init()
 
         cfgs = [
             "functions.exp_iterations",

@@ -66,7 +66,7 @@ from pathlib import Path
 
 import boto3
 import paramiko
-import crypten
+import curl
 
 
 def get_instances(ec2, instance_ids):
@@ -297,7 +297,7 @@ def main():
             executor.submit(run_command, instance_id, client, cmd, environment)
             rank += 1
 
-        if crypten.mpc.ttp_required():
+        if curl.mpc.ttp_required():
             ttp_instance = master_instance
             client = client_dict[ttp_instance.id]
 
@@ -310,7 +310,7 @@ def main():
                 environment_cmd,
                 f"cd {remote_dir} ;",
                 prepare_cmd,
-                crypten.mpc.provider.TTPServer,
+                curl.mpc.provider.TTPServer,
             )
             print(f"Run TTP command: {cmd} in { ttp_instance.id} with rendezvous: {rendezvous}")
             executor.submit(run_command, ttp_instance, client, cmd, environment)

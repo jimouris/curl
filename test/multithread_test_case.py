@@ -13,7 +13,7 @@ import unittest
 from functools import wraps
 from threading import Thread
 
-import crypten
+import curl
 
 
 class MultiThreadTestCase(unittest.TestCase):
@@ -21,7 +21,7 @@ class MultiThreadTestCase(unittest.TestCase):
 
     @property
     def rank(self):
-        from crypten.communicator import InProcessCommunicator
+        from curl.communicator import InProcessCommunicator
 
         if threading.current_thread() == threading.main_thread():
             return self.MAIN_PROCESS_RANK
@@ -87,7 +87,7 @@ class MultiThreadTestCase(unittest.TestCase):
             t.start()
 
     def _run(self, test_fn, rank, world_size):
-        crypten.init_thread(rank, world_size)
+        curl.init_thread(rank, world_size)
 
         self.setUp()
 

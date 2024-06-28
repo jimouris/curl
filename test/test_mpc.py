@@ -12,16 +12,16 @@ import math
 import os
 import unittest
 
-import crypten
-import crypten.communicator as comm
+import curl
+import curl.communicator as comm
 import torch
 import torch.nn.functional as F
-from crypten.common.functions.pooling import _pool2d_reshape
-from crypten.common.rng import generate_kbit_random_tensor, generate_random_ring_element
-from crypten.common.tensor_types import is_float_tensor
-from crypten.config import cfg
-from crypten.mpc import MPCTensor, ptype as Ptype
-from crypten.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
+from curl.common.functions.pooling import _pool2d_reshape
+from curl.common.rng import generate_kbit_random_tensor, generate_random_ring_element
+from curl.common.tensor_types import is_float_tensor
+from curl.config import cfg
+from curl.mpc import MPCTensor, ptype as Ptype
+from curl.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 
 
@@ -292,11 +292,11 @@ class TestMPC:
 
     def test_ptype(self):
         """Test that ptype attribute creates the correct type of encrypted tensor"""
-        ptype_values = [crypten.mpc.arithmetic, crypten.mpc.binary]
+        ptype_values = [curl.mpc.arithmetic, curl.mpc.binary]
         tensor_types = [ArithmeticSharedTensor, BinarySharedTensor]
         for i, curr_ptype in enumerate(ptype_values):
             tensor = self._get_random_test_tensor(is_float=False)
-            encr_tensor = crypten.cryptensor(tensor, ptype=curr_ptype)
+            encr_tensor = curl.cryptensor(tensor, ptype=curr_ptype)
             assert isinstance(encr_tensor._tensor, tensor_types[i]), "ptype test failed"
 
     def test_div(self):
@@ -1677,7 +1677,7 @@ class TestMPC:
 
     def test_to(self):
         """Tests Arithemetic/Binary SharedTensor type conversions."""
-        from crypten.mpc.ptype import ptype as Ptype
+        from curl.mpc.ptype import ptype as Ptype
 
         tensor_sizes = [(), (1,), (5,), (1, 1), (5, 5), (1, 1, 1), (5, 5, 5)]
 
@@ -2113,7 +2113,7 @@ class TestMPC:
 
     def _test_cache_save_load(self) -> None:
         # Determine expected filepaths
-        provider = crypten.mpc.get_default_provider()
+        provider = curl.mpc.get_default_provider()
         request_path = provider._DEFAULT_CACHE_PATH + f"/request_cache-{self.rank}"
         tuple_path = provider._DEFAULT_CACHE_PATH + f"/tuple_cache-{self.rank}"
 
@@ -2197,14 +2197,14 @@ class TestMPC:
         if comm.get().get_world_size() > 2:
             return
 
-        provider = crypten.mpc.get_default_provider()
+        provider = curl.mpc.get_default_provider()
 
         # Test tracing attribute
-        crypten.trace()
+        curl.trace()
         self.assertTrue(provider.tracing)
 
         x = get_random_test_tensor(is_float=True)
-        x = crypten.cryptensor(x)
+        x = curl.cryptensor(x)
 
         _ = x.square()
         _ = x * x
@@ -2241,11 +2241,11 @@ class TestMPC:
             "TupleProvider request cache incorrect",
         )
 
-        crypten.trace(False)
+        curl.trace(False)
         self.assertFalse(provider.tracing)
 
         # Check that cache populates as expected
-        crypten.fill_cache()
+        curl.fill_cache()
         kwargs = frozenset(kwargs.items())
         conv_kwargs = frozenset(conv_kwargs.items())
 
@@ -2262,7 +2262,7 @@ class TestMPC:
         self._test_cache_save_load()
 
         # Test that function calls return from cache when trace is off
-        crypten.trace(False)
+        curl.trace(False)
         _ = x.square()
         _ = x * x
         _ = x.matmul(x.t())
@@ -2280,26 +2280,26 @@ class TestMPC:
 class TestTFP(MultiProcessTestCase, TestMPC):
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TFP"
         super(TestTFP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTFP, self).tearDown()
 
 
 class TestTTP(MultiProcessTestCase, TestMPC):
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TTP"
         super(TestTTP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTTP, self).tearDown()
 
 

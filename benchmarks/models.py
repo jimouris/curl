@@ -12,7 +12,7 @@ Contains models used for benchmarking
 from dataclasses import dataclass
 from typing import Any
 
-import crypten
+import curl
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -32,7 +32,7 @@ N_FEATURES = 20
 class Model:
     name: str
     plain: torch.nn.Module
-    crypten: crypten.nn.Module
+    crypten: curl.nn.Module
     # must contains x, y, x_test, y_test attributes
     data: Any
     epochs: int
@@ -50,10 +50,10 @@ class LogisticRegression(torch.nn.Module):
         return torch.sigmoid(self.linear(x))
 
 
-class LogisticRegressionCrypTen(crypten.nn.Module):
+class LogisticRegressionCrypTen(curl.nn.Module):
     def __init__(self, n_features=N_FEATURES):
         super().__init__()
-        self.linear = crypten.nn.Linear(n_features, 1)
+        self.linear = curl.nn.Linear(n_features, 1)
 
     def forward(self, x):
         return self.linear(x).sigmoid()
@@ -73,12 +73,12 @@ class FeedForward(torch.nn.Module):
         return out
 
 
-class FeedForwardCrypTen(crypten.nn.Module):
+class FeedForwardCrypTen(curl.nn.Module):
     def __init__(self, n_features=N_FEATURES):
         super().__init__()
-        self.linear1 = crypten.nn.Linear(n_features, n_features // 2)
-        self.linear2 = crypten.nn.Linear(n_features // 2, n_features // 4)
-        self.linear3 = crypten.nn.Linear(n_features // 4, 1)
+        self.linear1 = curl.nn.Linear(n_features, n_features // 2)
+        self.linear2 = curl.nn.Linear(n_features // 2, n_features // 4)
+        self.linear3 = curl.nn.Linear(n_features // 4, 1)
 
     def forward(self, x):
         out = (self.linear1(x)).relu()
@@ -97,13 +97,13 @@ class ResNet(nn.Module):
         return self.model(x)
 
 
-class ResNetCrypTen(crypten.nn.Module):
+class ResNetCrypTen(curl.nn.Module):
     def __init__(self, n_layers=18):
         super().__init__()
         assert n_layers in [18, 34, 50]
         model = getattr(models, "resnet{}".format(n_layers))(pretrained=True)
         dummy_input = torch.rand([1, 3, 224, 224])
-        self.model = crypten.nn.from_pytorch(model, dummy_input)
+        self.model = curl.nn.from_pytorch(model, dummy_input)
 
     def forward(self, x):
         return self.model(x)

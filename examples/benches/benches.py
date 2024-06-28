@@ -8,13 +8,13 @@ import pandas as pd
 import torch
 import functools
 
-import crypten
+import curl
 import torch
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-from crypten.config import cfg
-import crypten.communicator as comm
+from curl.config import cfg
+import curl.communicator as comm
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -115,7 +115,7 @@ class FuncBenchmarks:
     def get_runtimes(self):
         """Returns plain text and crypten runtimes"""
         x = torch.rand(self.tensor_size, device=self.device)*5 + 1
-        x_enc = crypten.cryptensor(x)
+        x_enc = curl.cryptensor(x)
 
         runtimes_enc = []
         for func in FuncBenchmarks.UNARY:
@@ -171,7 +171,7 @@ class FuncBenchmarks:
             DOMAIN = DOMAIN.to(device=self.device)
 
         y = torch.rand(DOMAIN.shape, device=self.device)
-        DOMAIN_enc, _ = crypten.cryptensor(DOMAIN), crypten.cryptensor(y)
+        DOMAIN_enc, _ = curl.cryptensor(DOMAIN), curl.cryptensor(y)
 
         if func in ["gelu"]:
             gelu = lambda x: x * (1 + (x / torch.sqrt(torch.tensor(2))).erf()) / 2
@@ -232,13 +232,13 @@ class FuncBenchmarks:
                 }
             )
 
-def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communication=False, device="cpu"):
+def run_benches(cfg_file, tensor_size, with_cache=False, communication=False, device="cpu"):
     device = torch.device(device)
 
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file, party_name=party_name, device=device)
+    curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
@@ -246,7 +246,7 @@ def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communicati
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
     logging.info("\t'{}'".format(filtered_data))
     if with_cache:
-        crypten.trace()
+        curl.trace()
 
     logging.info(f"="*22 + " Without Cache " + "="*22)
 
@@ -261,11 +261,11 @@ def run_benches(cfg_file, tensor_size, party_name, with_cache=False, communicati
 
     if with_cache:
         # Populate the cache.
-        crypten.fill_cache()
-        provider = crypten.mpc.get_default_provider()
+        curl.fill_cache()
+        provider = curl.mpc.get_default_provider()
         provider.save_cache()
         provider.load_cache()
-        crypten.trace(False)
+        curl.trace(False)
 
         # Run with the cache.
         logging.info(f"="*24 + " With Cache " + "="*24)

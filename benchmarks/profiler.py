@@ -30,6 +30,6 @@ model_crypten = model.crypten(model_benchmarks.n_features).encrypt()
 
 # profile inference
 x_enc = model_benchmarks.x_enc
-model_crypten.train = False
+model_curl.train = False
 
 # get_ipython().run_cell_magic("snakeviz", "", "\n\nmodel_crypten(x_enc)")

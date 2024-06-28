@@ -11,7 +11,7 @@ import multiprocessing
 import os
 import uuid
 
-import crypten
+import curl
 import torch
 
 class MultiProcessLauncher:
@@ -51,7 +51,7 @@ class MultiProcessLauncher:
             )
             self.processes.append(process)
 
-        if crypten.mpc.ttp_required():
+        if curl.mpc.ttp_required():
             if fn_args.multi_gpu:
                 ttp_device = torch.device(f"cuda:{world_size}")
             else:
@@ -64,7 +64,7 @@ class MultiProcessLauncher:
                     world_size,
                     world_size,
                     env,
-                    crypten.mpc.provider.TTPServer,
+                    curl.mpc.provider.TTPServer,
                     None,
                     cfg_file,
                     ttp_device,
@@ -79,7 +79,7 @@ class MultiProcessLauncher:
         os.environ["RANK"] = str(rank)
         orig_logging_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.INFO)
-        crypten.init(cfg_file, device=device)
+        curl.init(cfg_file, device=device)
         logging.getLogger().setLevel(orig_logging_level)
         if fn_args is None:
             run_process_fn()

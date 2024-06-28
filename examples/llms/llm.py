@@ -8,13 +8,13 @@ import pandas as pd
 import torch
 import functools
 
-import crypten
+import curl
 import torch
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-from crypten.config import cfg
-import crypten.communicator as comm
+from curl.config import cfg
+import curl.communicator as comm
 
 Runtime = namedtuple("Runtime", "mid q1 q3")
 
@@ -47,7 +47,7 @@ def time_me(func=None, n_loops=1):
 
 
 class LLMs:
-    """LLM benchmarks runtime and error of crypten functions against PyTorch
+    """LLM benchmarks runtime and error of curl functions against PyTorch
 
     Args:
         tensor_size (int or tuple): size of tensor for benchmarking runtimes
@@ -96,7 +96,7 @@ class LLMs:
         return model(x)
 
     def get_runtimes(self):
-        """Returns plain text and crypten runtimes"""
+        """Returns plain text and curl runtimes"""
 
         rank = comm.get().get_rank()
         print(f'[Device] Party-{rank} running in {self.device}')
@@ -107,7 +107,7 @@ class LLMs:
                 x = torch.rand(self.tensor_size, device=self.device)
             else:
                 x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
-            x_enc = crypten.cryptensor(x)
+            x_enc = curl.cryptensor(x)
 
             llm.eval()
 
@@ -127,11 +127,11 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communication=False, full=True, device=None):
+def run_llm(cfg_file, tensor_size, model, with_cache=False, communication=False, full=True, device=None):
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
-    crypten.init(cfg_file, party_name=party_name, device=device)
+    curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
@@ -139,7 +139,7 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communic
     filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
     logging.info("\t'{}'".format(filtered_data))
     if with_cache:
-        crypten.trace()
+        curl.trace()
 
     logging.info(f"="*22 + " Without Cache " + "="*22)
 
@@ -154,11 +154,11 @@ def run_llm(cfg_file, tensor_size, party_name, model, with_cache=False, communic
 
     if with_cache:
         # Populate the cache.
-        crypten.fill_cache()
-        provider = crypten.mpc.get_default_provider()
+        curl.fill_cache()
+        provider = curl.mpc.get_default_provider()
         provider.save_cache()
         provider.load_cache()
-        crypten.trace(False)
+        curl.trace(False)
 
         # Run with the cache.
         logging.info(f"="*24 + " With Cache " + "="*24)

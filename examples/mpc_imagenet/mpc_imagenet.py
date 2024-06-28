@@ -8,7 +8,7 @@
 import logging
 import tempfile
 
-import crypten
+import curl
 import torch
 import torchvision.datasets as datasets
 import torchvision.models as models
@@ -18,7 +18,7 @@ from examples.util import NoopContextManager
 
 
 try:
-    from crypten.nn.tensorboard import SummaryWriter
+    from curl.nn.tensorboard import SummaryWriter
 except ImportError:  # tensorboard not installed
     SummaryWriter = None
 
@@ -32,7 +32,7 @@ def run_experiment(
 ):
     """Runs inference using specified vision model on specified dataset."""
 
-    crypten.init()
+    curl.init()
     # check inputs:
     assert hasattr(models, model_name), (
         "torchvision does not provide %s model" % model_name
@@ -65,7 +65,7 @@ def run_experiment(
     # encrypt model:
     dummy_input = to_tensor_transform(dataset[0][0])
     dummy_input.unsqueeze_(0)
-    encrypted_model = crypten.nn.from_pytorch(model, dummy_input=dummy_input)
+    encrypted_model = curl.nn.from_pytorch(model, dummy_input=dummy_input)
     encrypted_model.encrypt()
 
     # show encrypted model in tensorboard:
@@ -85,7 +85,7 @@ def run_experiment(
         target = torch.tensor([target], dtype=torch.long)
 
         # perform inference using encrypted model on encrypted sample:
-        encrypted_image = crypten.cryptensor(image)
+        encrypted_image = curl.cryptensor(image)
         encrypted_output = encrypted_model(encrypted_image)
 
         # measure accuracy of prediction

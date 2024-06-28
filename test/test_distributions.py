@@ -8,15 +8,15 @@
 
 import math
 
-import crypten
+import curl
 import torch
-from crypten.config import cfg
+from curl.config import cfg
 from test.multiprocess_test_case import MultiProcessTestCase
 
 
 class TestDistributions:
     """
-    This class tests accuracy of distributions provided by random sampling in crypten.
+    This class tests accuracy of distributions provided by random sampling in curl.
     """
 
     def _check_distribution(
@@ -64,16 +64,16 @@ class TestDistributions:
                 )
 
     def test_uniform(self):
-        self._check_distribution(crypten.rand, 0.5, 0.083333, lb=0, ub=1)
+        self._check_distribution(curl.rand, 0.5, 0.083333, lb=0, ub=1)
 
     def test_normal(self):
-        self._check_distribution(crypten.randn, 0, 1)
+        self._check_distribution(curl.randn, 0, 1)
 
     def test_bernoulli(self):
         for p in [0.25 * i for i in range(5)]:
 
             def bernoulli(*size):
-                x = crypten.cryptensor(p * torch.ones(*size))
+                x = curl.cryptensor(p * torch.ones(*size))
                 return x.bernoulli()
 
             self._check_distribution(bernoulli, p, p * (1 - p), lb=0, ub=1)
@@ -89,24 +89,24 @@ class TestDistributions:
 class TestTFP(MultiProcessTestCase, TestDistributions):
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TFP"
         super(TestTFP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTFP, self).tearDown()
 
 
 class TestTTP(MultiProcessTestCase, TestDistributions):
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TTP"
         super(TestTTP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTTP, self).tearDown()

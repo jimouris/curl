@@ -12,7 +12,7 @@ import sys
 import setuptools
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "crypten"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "curl"))
 
 # Read description and requirements.
 with open("README.md", encoding="utf8") as f:
@@ -21,13 +21,13 @@ with open("requirements.txt") as f:
     reqs = f.read()
 
 # get version string from module
-init_path = os.path.join(os.path.dirname(__file__), "crypten/__init__.py")
+init_path = os.path.join(os.path.dirname(__file__), "curl/__init__.py")
 with open(init_path, "r") as f:
     version = re.search(r"__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M).group(1)
 
 # Set key package information.
-DISTNAME = "crypten"
-DESCRIPTION = "CrypTen: secure machine learning in PyTorch."
+DISTNAME = "curl"
+DESCRIPTION = "Curl: secure machine learning in PyTorch."
 LONG_DESCRIPTION = readme
 AUTHOR = "Facebook AI Research"
 LICENSE = "MIT licensed, as found in the LICENSE file"
@@ -37,7 +37,7 @@ VERSION = version
 # Run installer.
 if __name__ == "__main__":
     if sys.version_info < (3, 7):
-        sys.exit("Sorry, Python >=3.7 is required for CrypTen.")
+        sys.exit("Sorry, Python >=3.7 is required for Curl.")
 
     setuptools.setup(
         name=DISTNAME,
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         description=DESCRIPTION,
         long_description=LONG_DESCRIPTION,
         long_description_content_type="text/markdown",
-        url="https://github.com/facebookresearch/CrypTen",
+        url="https://github.com/facebookresearch/Curl",
         author=AUTHOR,
         license=LICENSE,
         tests_require=["pytest"],

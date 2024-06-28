@@ -7,7 +7,7 @@
 
 import unittest
 
-import crypten
+import curl
 
 
 try:
@@ -20,7 +20,7 @@ except ValueError:
 
 class TestBenchmark(unittest.TestCase):
     def setUp(self) -> None:
-        crypten.init()
+        curl.init()
 
     @unittest.skip("Skipping to resolve timeout issues in unittest framework")
     def test_func_benchmarks_run(self) -> None:

@@ -1,6 +1,6 @@
 import logging
-import crypten
-import crypten.nn as nn
+import curl
+import curl.nn as nn
 import torch
 
 class Bert(nn.Module):
@@ -28,7 +28,7 @@ class Bert(nn.Module):
 
         if full:
             self.tok_embed = nn.Embedding(vocab_size, embed_dim)
-            self.pos_embed = nn.Parameter(crypten.cryptensor(torch.zeros(1, seq_len, embed_dim)))
+            self.pos_embed = nn.Parameter(curl.cryptensor(torch.zeros(1, seq_len, embed_dim)))
         self.ln = nn.LayerNorm
         self.blocks = nn.Sequential(
             *[Bert.Block(embed_dim, num_heads) for _ in range(num_blocks)]

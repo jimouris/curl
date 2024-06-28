@@ -11,12 +11,12 @@ import itertools
 import logging
 import unittest
 
-import crypten
+import curl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from crypten.config import cfg
-from crypten.cuda import CUDALongTensor
+from curl.config import cfg
+from curl.cuda import CUDALongTensor
 from test.multiprocess_test_case import get_random_test_tensor, MultiProcessTestCase
 from test.test_mpc import TestMPC
 
@@ -64,12 +64,12 @@ class TestCUDA(TestMPC):
         """Test the forward/backward pass of MLP on GPU"""
         model = MLP()
         dummy_input = torch.empty((32, 128))
-        model = crypten.nn.from_pytorch(model, dummy_input=dummy_input)
+        model = curl.nn.from_pytorch(model, dummy_input=dummy_input)
         model = model.to(self.device)
         model.encrypt()
         model.train()
 
-        rand_in = crypten.cryptensor(
+        rand_in = curl.cryptensor(
             torch.rand([32, 128], device=self.device), requires_grad=True
         )
         output = model(rand_in)
@@ -583,13 +583,13 @@ class TestTFP(MultiProcessTestCase, TestCUDA):
 
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TFP"
         super(TestTFP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTFP, self).tearDown()
 
 
@@ -600,13 +600,13 @@ class TestTTP(MultiProcessTestCase, TestCUDA):
 
     def setUp(self) -> None:
         self._original_provider = cfg.mpc.provider
-        crypten.CrypTensor.set_grad_enabled(False)
+        curl.CrypTensor.set_grad_enabled(False)
         cfg.mpc.provider = "TTP"
         super(TestTTP, self).setUp()
 
     def tearDown(self) -> None:
         cfg.mpc.provider = self._original_provider
-        crypten.CrypTensor.set_grad_enabled(True)
+        curl.CrypTensor.set_grad_enabled(True)
         super(TestTTP, self).tearDown()
 
 
