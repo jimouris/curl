@@ -148,17 +148,17 @@ class BertForSequenceClassification(nn.Module):
         self.bert = BertModel(vocab_size, emb_size, seq_len, n_heads, n_layers)
         self.classifier = nn.Linear(emb_size, 2)
 
-    def forward(self, x):
-        _, pooled_out = self.bert(x["input_ids"], x["token_type_ids"])
+    def forward(self, input_ids, token_type_ids):
+        _, pooled_out = self.bert(input_ids, token_type_ids)
         logits = self.classifier(pooled_out)
         return logits
 
 
 class BertTinyForSequenceClassification(BertForSequenceClassification):
-    def __init__(self, seq_len, full=True):
+    def __init__(self):
         super(BertTinyForSequenceClassification, self).__init__(vocab_size=30522, emb_size=128, seq_len=512, n_heads=2, n_layers=2)
 
 
 class BertBaseForSequenceClassification(BertForSequenceClassification):
-    def __init__(self, seq_len, full=True):
+    def __init__(self):
         super(BertBaseForSequenceClassification, self).__init__(vocab_size=28996, emb_size=768, seq_len=512, n_heads=12, n_layers=12)

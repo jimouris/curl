@@ -288,7 +288,7 @@ class Module:
             metadata = getattr(state_dict, "_metadata", None)
             if metadata is None:
                 raise ValueError("Specified state_dict does not have metadata.")
-            version = metadata.get("version", -1)
+            version = metadata.get("version", 1)
             if version != Module._version:
                 raise ValueError(
                     "Specified state_dict has incorrect version: {}".format(version)
