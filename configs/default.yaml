@@ -6,10 +6,10 @@ debug:
 encoder:
   precision_bits: 16
   trunc_method:
-    prod: "crypten"
-    # prod: "egk"
-    lut: "crypten"
-    # lut: "egk"
+    # prod: "crypten"
+    prod: "egk"
+    # lut: "crypten"
+    lut: "egk"
 functions:
   max_method: "log_reduction"
 
@@ -23,7 +23,7 @@ functions:
   exp_neg_lut_size: 256 # 2^8
 
   # log configuration
-  log_method: "bior"
+  log_method: "haar"
   log_iterations: 2
   log_exp_iterations: 8
   log_order: 8
@@ -32,7 +32,7 @@ functions:
   log_lut_max_bits: 6
 
   # reciprocal configuration
-  reciprocal_method: "bior"
+  reciprocal_method: "haar"
   reciprocal_nr_iters: 10
   reciprocal_log_iters: 1
   reciprocal_all_pos: True
@@ -42,7 +42,7 @@ functions:
   reciprocal_lut_max_bits: 6
 
   # sqrt configuration
-  sqrt_method: "bior"
+  sqrt_method: "haar"
   sqrt_nr_iters: 5
   sqrt_nr_initial: null
   sqrt_haar_size_bits: 7
@@ -56,13 +56,13 @@ functions:
   inv_sqrt_bior_size_bits: 11
   inv_sqrt_lut_max_bits: 8
   inv_sqrt_tailored_0_lut_max_bits: 0
-  inv_sqrt_tailored_0_haar_size_bits: 8
+  inv_sqrt_tailored_0_haar_size_bits: 12
   inv_sqrt_tailored_1_lut_max_bits: 8
-  inv_sqrt_tailored_1_haar_size_bits: 9
+  inv_sqrt_tailored_1_haar_size_bits: 8
 
   # sigmoid / tanh configuration
   # sigmoid_tanh_method: "bior-lut-only"
-  sigmoid_tanh_method: "bior"
+  sigmoid_tanh_method: "haar"
   sigmoid_tanh_terms: 32
   sigmoid_tanh_haar_size_bits: 8
   sigmoid_tanh_bior_size_bits: 8
@@ -70,21 +70,21 @@ functions:
   tanh_lut_max_bits: 5
 
   # trigonometry configuration
-  trigonometry_method: "bior"
+  trigonometry_method: "haar"
   trigonometry_haar_size_bits: 8
   trigonometry_bior_size_bits: 8
   trigonometry_lut_max_bits: 5
   trig_iterations: 10
 
   # error function configuration:
-  erf_method: "bior"
+  erf_method: "haar"
   erf_iterations: 8
   erf_haar_size_bits: 8
   erf_bior_size_bits: 8
   erf_lut_max_bits: 5
 
   # gelu configuration:
-  gelu_method: "bior"
+  gelu_method: "haar"
   # gelu_method: "bior-lut-only"
   gelu_haar_size_bits: 4
   gelu_bior_size_bits: 4

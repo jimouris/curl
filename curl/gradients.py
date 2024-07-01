@@ -1993,9 +1993,15 @@ class AutogradLayerNorm(AutogradFunction):
             if torch.is_tensor(variance):
                 inv_var = 1.0 / torch.sqrt(variance + eps)
             else:
+                var = (variance + eps).get_plain_text()
+                # print(f"{var=}")
+                # print(f"{var.max()=} {var.min()=}")
+                # plain_inv_var = 1.0 / torch.sqrt(var)
+                # print(f"{plain_inv_var=}")
                 inv_var = (variance + eps).inv_sqrt()
-                # var = (variance + eps).get_plain_text()
-                # inv_var = 1.0 / torch.sqrt(var)
+                # print(f"{inv_var.get_plain_text()=}")
+                # print(f"Diff {plain_inv_var-inv_var.get_plain_text()}")
+                # print(f"Rel  {(plain_inv_var-inv_var.get_plain_text())/plain_inv_var}")
 
         # reshape shape (C) to broadcastable (1, C, 1, +):
         # mean = mean.reshape(broadcast_shape)
