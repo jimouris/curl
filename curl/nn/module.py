@@ -2420,6 +2420,25 @@ class SILU(Module):
         return SILU()
 
 
+class Tanh(Module):
+    r"""Applies the element-wise function:
+    .. math::
+        \text{Tanh}(x) = \tanh(x)
+    """
+
+    def __init__(self, inplace=False):
+        super().__init__()
+        if inplace:
+            logging.warning("CrypTen Tanh module does not support inplace computation.")
+
+    def forward(self, x):
+        return x.tanh()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Tanh()
+
+
 class Hardtanh(Module):
     r"""Applies the Hardtanh function element-wise
 
