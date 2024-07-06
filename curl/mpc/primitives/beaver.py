@@ -304,18 +304,25 @@ def evaluate_embed(x, embed):
     Returns:
         Cryptensor: Result tensor after applying the LUT.
     """
+    from .arithmetic import ArithmeticSharedTensor
+
     provider = curl.mpc.get_default_provider()
     size = embed.size()[0]
     shape = x.size() + (embed.size()[1],)
     x = x.flatten()
 
-    # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot(x.size(), size, device=x.device)
+    embed = ArithmeticSharedTensor.from_shares(embed, precision=0)
 
+    # Generate one-hot vectors for each element of x
+    r, one_hot_r = provider.generate_one_hot_costumized(x.size(), size, device=x.device)
+
+    reveal_x = x.reveal()
+    reveal_r = r.reveal()
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        z = (x - r)
-        shift_amount = z.reveal() % size
+        # z = (x - r) 
+        # shift_amount = z.reveal() % size
+        shift_amount = (reveal_x - reveal_r) % size
 
     if shift_amount.size():
         arange = torch.arange(size).to(device=x.device)
