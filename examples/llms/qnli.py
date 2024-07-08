@@ -8,6 +8,8 @@ import argparse
 import codecs
 import logging
 import os
+import torch
+from math import ceil, log2
 from transformers import AutoTokenizer, BertForSequenceClassification
 
 import curl
@@ -15,8 +17,6 @@ import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
 from examples.llms.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
-from math import ceil, log2
-import torch
 
 
 def load_tsv(data_file, tokenizer, delimiter='\t'):
@@ -38,33 +38,35 @@ def get_bert_model(path, encyrpted_model):
     bert_model.eval()
     curl_bert_model = encyrpted_model()
     curl_bert_model.load_state_dict(bert_model.state_dict())
-    # Increase the vocabulary size to the next power of two 
-    # This is used for correctness in the 'evaluate_embed' function 
+
+    # Increase the vocabulary size to the next power of two.
+    # This is used for correctness in the 'evaluate_embed' function.
     weight = curl_bert_model.bert.embeddings.word_embeddings.weight
     new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
     append = torch.zeros(new_size, weight.size()[1])
     curl_bert_model.bert.embeddings.word_embeddings.weight = torch.cat((weight, append))
+
     curl_bert_model.encrypt(src=0)
     bert_tokenizer = AutoTokenizer.from_pretrained(path)
     return curl_bert_model, bert_tokenizer, bert_model
 
 
-def run_qnli_accuracy_test(model, data, targets, total, encrypted=False):
+def run_qnli_accuracy_test(model, curl_model, data, targets, total):
     count = 0
+    count_enc = 0
     for label in range(total):
-        if encrypted:
-            x = {}
-            x['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0)
-            x['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
-        else:
-            x = data[label]
-        outputs = model(**x)
-        if encrypted:
-            outputs = outputs.get_plain_text()
-        else:
-            outputs = outputs.logits
-        count += targets[label] == outputs.argmax()
-    return count / total
+        # Plaintext
+        outputs = model(**data[label])
+        result = outputs.logits
+        count += targets[label] == result.argmax()
+        # Encrypted
+        x_enc = {}
+        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0)
+        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
+        outputs_enc = curl_model(**x_enc)
+        result_enc = outputs_enc.get_plain_text()
+        count_enc += targets[label] == result_enc.argmax()
+    return count / total, count_enc / total
 
 
 def run_qnli(cfg_file, model, count=100, communication=False, device=None):
@@ -83,9 +85,8 @@ def run_qnli(cfg_file, model, count=100, communication=False, device=None):
     if count < 1:
         count = len(data)
 
-    base_accuracy = run_qnli_accuracy_test(bert_model, data, targets, count, encrypted=False)
+    base_accuracy, curl_accuracy = run_qnli_accuracy_test(bert_model, curl_bert_model, data, targets, count)
     logging.info(f"Base Accuracy: {base_accuracy}")
-    curl_accuracy = run_qnli_accuracy_test(curl_bert_model, data, targets, count, encrypted=True)
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
     if communication:

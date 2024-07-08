@@ -43,7 +43,7 @@ functions:
 
   # sqrt configuration
   sqrt_method: "bior"
-  sqrt_nr_iters: 3
+  sqrt_nr_iters: 5
   sqrt_nr_initial: null
   sqrt_haar_size_bits: 7
   sqrt_bior_size_bits: 7
