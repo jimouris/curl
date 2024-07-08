@@ -15,6 +15,8 @@ import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
 from examples.llms.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
+from math import ceil, log2
+import torch
 
 
 def load_tsv(data_file, tokenizer, delimiter='\t'):
@@ -36,6 +38,12 @@ def get_bert_model(path, encyrpted_model):
     bert_model.eval()
     curl_bert_model = encyrpted_model()
     curl_bert_model.load_state_dict(bert_model.state_dict())
+    # Increase the vocabulary size to the next power of two 
+    # This is used for correctness in the 'evaluate_embed' function 
+    weight = curl_bert_model.bert.embeddings.word_embeddings.weight
+    new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
+    append = torch.zeros(new_size, weight.size()[1])
+    curl_bert_model.bert.embeddings.word_embeddings.weight = torch.cat((weight, append))
     curl_bert_model.encrypt(src=0)
     bert_tokenizer = AutoTokenizer.from_pretrained(path)
     return curl_bert_model, bert_tokenizer, bert_model

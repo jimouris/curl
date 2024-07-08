@@ -90,20 +90,6 @@ class TrustedFirstParty(TupleProvider):
         one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
         r_shares = ArithmeticSharedTensor(r_clear, precision=0, src=0)
         return r_shares, one_hot
-    
-    def generate_one_hot_costumized(self, tensor_size, lut_size, device=None):
-        """Generate one hot vectors of given sizes for lookup tables"""
-        r = generate_random_ring_element(tensor_size, device=device)
-        r_clear = r % lut_size
-
-        one_hot = []
-        for i in range(lut_size):
-            one_hot.append((r_clear == i) * 1)
-        one_hot = torch_stack(one_hot)
-
-        one_hot = ArithmeticSharedTensor(one_hot.t(), precision=0, src=0)
-        r_shares = ArithmeticSharedTensor(r_clear, precision=0, src=0)
-        return r_shares, one_hot
 
     def egk_trunc_pr_rng(self, size, l, m, device=None):
         """

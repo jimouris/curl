@@ -102,7 +102,7 @@ functions:
   # silu_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
 mpc:
   active_security: False
-  provider: "TFP"
+  provider: "TTP"
   protocol: "beaver"
 nn:
   dpsmpc:

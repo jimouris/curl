@@ -314,15 +314,12 @@ def evaluate_embed(x, embed):
     embed = ArithmeticSharedTensor.from_shares(embed, precision=0)
 
     # Generate one-hot vectors for each element of x
-    r, one_hot_r = provider.generate_one_hot_costumized(x.size(), size, device=x.device)
+    r, one_hot_r = provider.generate_one_hot(x.size(), size, device=x.device)
 
-    reveal_x = x.reveal()
-    reveal_r = r.reveal()
     # Reveal the shift amounts
     with IgnoreEncodings([x, r]):
-        # z = (x - r) 
-        # shift_amount = z.reveal() % size
-        shift_amount = (reveal_x - reveal_r) % size
+        z = (x - r)
+        shift_amount = z.reveal() % size
 
     if shift_amount.size():
         arange = torch.arange(size).to(device=x.device)

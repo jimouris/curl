@@ -19,7 +19,7 @@ from curl.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 from .provider import TupleProvider
 
 
-TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_hot", "generate_one_hot_costum", "egk_trunc_pr_rng"]
+TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_hot", "egk_trunc_pr_rng"]
 
 
 class TrustedThirdParty(TupleProvider):
@@ -132,27 +132,6 @@ class TrustedThirdParty(TupleProvider):
         r = ArithmeticSharedTensor.from_shares(r, precision=0)
         one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r.t(), precision=0)
         return r, one_hot_r
-    
-
-    def generate_one_hot_costumized(self, tensor_size, lut_size, device=None):
-        """Generate lookup table vectors of given sizes with lut_size
-        that is a non-power of 2."""
-        generator = TTPClient.get().get_generator(device=device)
-
-        _ = generate_random_ring_element(tensor_size, generator=generator, device=device)
-        if comm.get().get_rank() == 0:
-            # Request one_hot vector from TTP
-            one_hot_r_and_r = TTPClient.get().ttp_request("generate_one_hot_costumized", device, tensor_size, lut_size)
-            one_hot_r = one_hot_r_and_r[0]
-            r = one_hot_r_and_r[1][0]
-        else:
-            one_hot_r = generate_random_ring_element((lut_size, tensor_size[0]), generator=generator, device=device)
-            r = generate_random_ring_element(tensor_size, generator=generator, device=device)
-
-        r = ArithmeticSharedTensor.from_shares(r, precision=0)
-        one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r.t(), precision=0)
-        return r, one_hot_r
-
 
     def egk_trunc_pr_rng(self, size, l, m, device=None):
         """Generate random values for the [EGK+20] probabilistic truncation protocol."""
@@ -441,28 +420,6 @@ class TTPServer:
         one_hot = torch_stack(one_hot)
 
         return one_hot - self._get_additive_PRSS(one_hot.size(), remove_rank=True)
-    
-    def generate_one_hot_costumized(self, tensor_size, lut_size):
-        """Generate lookup table vectors of given sizes when lut_size 
-        is not a power of 2."""
-        r = self._get_additive_PRSS(tensor_size)
-        r_clear = r % lut_size
-
-        one_hot = []
-        for i in range(lut_size):
-            one_hot.append((r_clear == i) * 1)
-        one_hot = torch_stack(one_hot)
-
-        # compute shares for party 0
-        one_hot0 = one_hot - self._get_additive_PRSS(one_hot.size(), remove_rank=True)
-        r0 = r_clear - self._get_additive_PRSS(tensor_size, remove_rank=True)
-
-        leading_dim = one_hot0.size(0)
-        r0_expanded = r0.unsqueeze(0).expand(leading_dim, -1)
-        # Concatenate the tensors along a new dimension
-        combined_tensor = torch.stack((one_hot0, r0_expanded), dim=0)
-
-        return combined_tensor
 
     def egk_trunc_pr_rng(self, size, exp):
 
