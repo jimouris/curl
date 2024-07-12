@@ -27,7 +27,7 @@ Curl's goal and model is similar to CrypTen:
 
 
 ## How to cite this work
-The preprint can be accessed [here](https://eprint.iacr.org/2024/XXX); you can cite this work as follows:
+The preprint can be accessed [here](https://eprint.iacr.org/2024/1127); you can cite this work as follows:
 ```bibtex
 @Misc{EPRINT:GUMVT24,
   author =       "Manuel B. Santos and
@@ -37,10 +37,10 @@ The preprint can be accessed [here](https://eprint.iacr.org/2024/XXX); you can c
                   José Reis and
                   Shubho Sengupta and
                   Miguel de Vega",
-  title =        "{Curl: A Framework for Secure Large Language Models}",
+  title =        "{Curl: Private LLMs through Wavelet-Encoded Look-Up Tables}",
   year =         2024,
-  howpublished = "Cryptology ePrint Archive, Report 2024/XXX",
-  note =         "\url{https://eprint.iacr.org/2024/XXX}",
+  howpublished = "Cryptology ePrint Archive, Report 2024/1127",
+  note =         "\url{https://eprint.iacr.org/2024/1127}",
 }
 ```
 
