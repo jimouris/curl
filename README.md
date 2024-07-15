@@ -29,7 +29,7 @@ Curl's goal and model is similar to CrypTen:
 ## How to cite this work
 The preprint can be accessed [here](https://eprint.iacr.org/2024/1127); you can cite this work as follows:
 ```bibtex
-@Misc{EPRINT:GUMVT24,
+@Misc{EPRINT:SMUJRSV24,
   author =       "Manuel B. Santos and
                   Dimitris Mouris and
                   Mehmet Ugurbil and
