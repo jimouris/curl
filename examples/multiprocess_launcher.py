@@ -21,21 +21,24 @@ class MultiProcessLauncher:
         env = os.environ.copy()
         env["WORLD_SIZE"] = str(world_size)
         multiprocessing.set_start_method("spawn")
-        device = torch.device(fn_args.device)
+        if fn_args is None or 'device' not in fn_args:
+            device = torch.device(device="cpu")
+        else:
+            device = torch.device(fn_args.device)
 
         # Use random file so multiple jobs can be run simultaneously
         INIT_METHOD = "file:///tmp/crypten-rendezvous-{}".format(uuid.uuid1())
         env["RENDEZVOUS"] = INIT_METHOD
 
         # Using multiple GPUs
-        if fn_args.multi_gpu:
+        if 'multi_gpu' in fn_args and fn_args.multi_gpu:
             assert (
                 fn_args.world_size < torch.cuda.device_count()
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
 
         self.processes = []
         for rank in range(world_size):
-            if fn_args.multi_gpu:
+            if 'multi_gpu' in fn_args and fn_args.multi_gpu:
                 device = torch.device(f"cuda:{rank}")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
@@ -52,7 +55,7 @@ class MultiProcessLauncher:
             self.processes.append(process)
 
         if curl.mpc.ttp_required():
-            if fn_args.multi_gpu:
+            if 'multi_gpu' in fn_args and fn_args.multi_gpu:
                 ttp_device = torch.device(f"cuda:{world_size}")
             else:
                 ttp_device = device
