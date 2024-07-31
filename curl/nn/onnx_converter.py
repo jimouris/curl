@@ -47,7 +47,7 @@ def from_onnx(onnx_string_or_file):
     return _to_crypten(onnx_model)
 
 
-def from_pytorch(pytorch_model, dummy_input):
+def from_pytorch(pytorch_model, dummy_input, allow_plaintext_inputs: bool=False, allow_plaintext_weights: bool=False):
     """
     Converts a PyTorch model `pytorch_model` into a CrypTen model by tracing it
     using the input `dummy_input`.
@@ -63,6 +63,11 @@ def from_pytorch(pytorch_model, dummy_input):
 
     # make sure training / eval setting is copied:
     crypten_model.train(mode=pytorch_model.training)
+
+    # allow configurable plaintext support
+    crypten_model.SUPPORTS_PLAINTEXT_INPUTS = allow_plaintext_inputs
+    crypten_model.SUPPORTS_PLAINTEXT_WEIGHTS = allow_plaintext_weights
+
     return crypten_model
 
 

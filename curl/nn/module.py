@@ -24,6 +24,7 @@ class Module:
     # allow for versioning of modules:
     _version = 1
     SUPPORTS_PLAINTEXT_INPUTS = False
+    SUPPORTS_PLAINTEXT_WEIGHTS = False
 
     def __init__(self):
         self._parameters = OrderedDict()
@@ -524,7 +525,7 @@ class Module:
                         "Please make sure you feed your model CrypTensors when needed.",
                         DeprecationWarning,
                     )
-            elif not self.encrypted:
+            elif not self.encrypted and not self.SUPPORTS_PLAINTEXT_WEIGHTS:
                 if any(isinstance(arg, curl.CrypTensor) for arg in args):
                     raise RuntimeError(
                         "Cannot input CrypTensors into unencrypted model. "
