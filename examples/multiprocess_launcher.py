@@ -37,6 +37,7 @@ class MultiProcessLauncher:
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
 
         self.processes = []
+        self.ttp_process = None  # Track the TTP process separately
         for rank in range(world_size):
             if 'multi_gpu' in fn_args and fn_args.multi_gpu:
                 device = torch.device(f"cuda:{rank}")
@@ -60,7 +61,7 @@ class MultiProcessLauncher:
             else:
                 ttp_device = device
 
-            ttp_process = multiprocessing.Process(
+            self.ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name="TTP",
                 args=(
@@ -73,7 +74,7 @@ class MultiProcessLauncher:
                     ttp_device,
                 ),
             )
-            self.processes.append(ttp_process)
+            # self.processes.append(self.ttp_process)
 
     @classmethod
     def _run_process(cls, rank, world_size, env, run_process_fn, fn_args, cfg_file=None, device=None):
@@ -90,6 +91,8 @@ class MultiProcessLauncher:
             run_process_fn(fn_args)
 
     def start(self):
+        if self.ttp_process is not None:
+            self.ttp_process.start()
         for process in self.processes:
             process.start()
 
@@ -103,3 +106,5 @@ class MultiProcessLauncher:
     def terminate(self):
         for process in self.processes:
             process.terminate()
+        if self.ttp_process is not None and self.ttp_process.is_alive():
+            self.ttp_process.terminate()
