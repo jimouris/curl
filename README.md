@@ -27,26 +27,30 @@ Curl's goal and model is similar to CrypTen:
 
 
 ## How to cite this work
+
+Curl will appear in the proceedings of the Conference on Applied Machine Learning in Information Security (CAMLIS) 2024.
 The preprint can be accessed [here](https://eprint.iacr.org/2024/1127); you can cite this work as follows:
 ```bibtex
-@Misc{EPRINT:SMUJRSV24,
-  author =       "Manuel B. Santos and
-                  Dimitris Mouris and
-                  Mehmet Ugurbil and
-                  Stanislaw Jarecki and
-                  José Reis and
-                  Shubho Sengupta and
-                  Miguel de Vega",
-  title =        "{Curl: Private LLMs through Wavelet-Encoded Look-Up Tables}",
-  year =         2024,
-  howpublished = "Cryptology ePrint Archive, Report 2024/1127",
-  note =         "\url{https://eprint.iacr.org/2024/1127}",
+@InProceedings{CAMLIS:SMUJRSV24,
+  author =      "Manuel B. Santos and
+                 Dimitris Mouris and
+                 Mehmet Ugurbil and
+                 Stanislaw Jarecki and
+                 José Reis and
+                 Shubho Sengupta and
+                 Miguel de Vega",
+  title =       "{Curl: Private LLMs through Wavelet-Encoded Look-Up Tables}",
+  pages =       {1--31},
+  booktitle =   {Proceedings of the Conference on Applied Machine Learning in Information Security},
+  address =     {Arlington, Virginia, USA},
+  month =       {October 24--25,},
+  year =        2024,
 }
 ```
 
 The original CrypTen paper can be accessed [here](https://arxiv.org/pdf/2109.00984.pdf) (documented [here](https://crypten.readthedocs.io/en/latest/)); you can cite this work as follows:
 ```bibtex
-@inproceedings{crypten2020,
+@InProceedings{crypten2020,
   author={B. Knott and S. Venkataraman and A.Y. Hannun and S. Sengupta and M. Ibrahim and L.J.P. van der Maaten},
   title={CrypTen: Secure Multi-Party Computation Meets Machine Learning},
   booktitle={arXiv 2109.00984},
