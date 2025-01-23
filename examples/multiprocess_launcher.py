@@ -31,7 +31,7 @@ class MultiProcessLauncher:
         env["RENDEZVOUS"] = INIT_METHOD
 
         # Using multiple GPUs
-        if 'multi_gpu' in fn_args and fn_args.multi_gpu:
+        if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
             assert (
                 fn_args.world_size < torch.cuda.device_count()
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
@@ -39,7 +39,7 @@ class MultiProcessLauncher:
         self.processes = []
         self.ttp_process = None  # Track the TTP process separately
         for rank in range(world_size):
-            if 'multi_gpu' in fn_args and fn_args.multi_gpu:
+            if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
                 device = torch.device(f"cuda:{rank}")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device

@@ -328,6 +328,14 @@ class MPCTensor(CrypTensor):
         result._tensor.evaluate_embed(embed)
         return result
 
+    def shuffle(self):
+        """Shuffle the tensor."""
+        return self._tensor.shuffle()
+
+    def unshuffle(self, inv_permutation):
+        """Unshuffle the tensor."""
+        return self._tensor.unshuffle(inv_permutation)
+
 UNARY_FUNCTIONS = [
     "avg_pool2d",
     "square",

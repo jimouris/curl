@@ -47,3 +47,23 @@ def generate_kbit_random_tensor(size, bitlength=None, generator=None, **kwargs):
     if rand_tensor.is_cuda:
         return CUDALongTensor(rand_tensor)
     return rand_tensor
+
+
+def generate_permutation(size, generator=None, **kwargs):
+    """Helper function to generate a random permutation"""
+    if generator is None:
+        device = kwargs.get("device", torch.device("cpu"))
+        device = torch.device("cpu") if device is None else device
+        device = torch.device(device) if isinstance(device, str) else device
+        generator = curl.generators["local"][device]
+    permutation = torch.randperm(
+        size,
+        generator=generator,
+        dtype=torch.long,
+        **kwargs,
+    )
+    inv_permutation = torch.argsort(permutation)
+
+    if permutation.is_cuda:
+        return CUDALongTensor(permutation), CUDALongTensor(inv_permutation)
+    return permutation, inv_permutation

@@ -192,3 +192,9 @@ class TupleProvider:
         raise NotImplementedError(
             "TupleProvider egk_trunc_pr_rng not implemented."
         )
+
+    def generate_permutation(self, tensor_size, device=None):
+        """Generate random permutation."""
+        raise NotImplementedError(
+            "TupleProvider generate_permutation not implemented."
+        )

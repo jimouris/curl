@@ -12,7 +12,7 @@ import curl
 import curl.communicator as comm
 import torch
 import torch.distributed as dist
-from curl.common.rng import generate_kbit_random_tensor, generate_random_ring_element
+from curl.common.rng import generate_kbit_random_tensor, generate_random_ring_element, generate_permutation
 from curl.common.util import count_wraps, torch_stack
 from curl.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 
@@ -133,6 +133,10 @@ class TrustedThirdParty(TupleProvider):
         one_hot_r = ArithmeticSharedTensor.from_shares(one_hot_r.t(), precision=0)
         return r, one_hot_r
 
+    def generate_permutation(self, tensor_size, device=None):
+        generator = TTPClient.get().get_permutation_generator(device=device)
+        return generate_permutation(tensor_size, generator=generator, device=device)
+
     def egk_trunc_pr_rng(self, size, l, m, device=None):
         """Generate random values for the [EGK+20] probabilistic truncation protocol."""
         generator = TTPClient.get().get_generator(device=device)
@@ -201,6 +205,21 @@ class TTPClient:
             else:
                 self.generator_cuda = None
 
+            seed = torch.empty(size=(), dtype=torch.long)
+            dist.irecv(
+                tensor=seed, src=comm.get().get_ttp_rank(), group=self.ttp_group
+            ).wait()
+            dist.barrier(group=self.ttp_group)
+
+            self.permutation_generator = torch.Generator(device="cpu")
+            self.permutation_generator.manual_seed(seed.item())
+
+            if torch.cuda.is_available():
+                self.permutation_generator_cuda = torch.Generator(device="cuda")
+                self.permutation_generator_cuda.manual_seed(seed.item())
+            else:
+                self.permutation_generator_cuda = None
+
         def get_generator(self, device=None):
             if device is None:
                 device = "cpu"
@@ -209,6 +228,15 @@ class TTPClient:
                 return self.generator_cuda
             else:
                 return self.generator
+
+        def get_permutation_generator(self, device=None):
+            if device is None:
+                device = "cpu"
+            device = torch.device(device)
+            if device.type == "cuda":
+                return self.permutation_generator_cuda
+            else:
+                return self.permutation_generator
 
         def ttp_request(self, func_name, device, *args, **kwargs):
             assert (
@@ -325,6 +353,14 @@ class TTPServer:
                 self.generators_cuda[i].manual_seed(seeds[i].item())
             reqs[i].wait()
 
+        dist.barrier(group=self.ttp_group)
+
+        seed = torch.randint(-(2**63), 2**63 - 1, size=())
+        reqs = [
+            dist.isend(tensor=seed, dst=i, group=self.ttp_group) for i in range(ws)
+        ]
+        for i in range(ws):
+            reqs[i].wait()
         dist.barrier(group=self.ttp_group)
 
     def _get_generators(self, device=None):

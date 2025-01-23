@@ -333,6 +333,17 @@ def evaluate_embed(x, embed):
     return result
 
 
+def shuffle(x):
+    provider = curl.mpc.get_default_provider()
+    permutation, inv_permutation = provider.generate_permutation(x.size(0), device=x.device)
+    result = x[permutation]
+    return result, inv_permutation
+
+
+def unshuffle(x, inv_permutation):
+    return x[inv_permutation]
+
+
 def AND(x, y):
     """
     Performs Beaver protocol for binary secret-shared tensors x and y

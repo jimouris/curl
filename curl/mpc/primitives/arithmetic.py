@@ -658,6 +658,19 @@ class ArithmeticSharedTensor:
         self.encoder._precision_bits = embed.encoder._precision_bits
         return self
 
+    def shuffle(self):
+        """Shuffle the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        result, inv_permutation = protocol.shuffle(self)
+        self.share = result.share
+        return self, inv_permutation
+
+    def unshuffle(self, inv_permutation):
+        """Unshuffle the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        self.share = protocol.unshuffle(self, inv_permutation).share
+        return self
+
     def where(self, condition, y):
         """Selects elements from self or y based on condition
 
