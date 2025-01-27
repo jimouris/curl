@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-python examples/llms/launcher.py --world_size 2 --tensor_size 1000,10 --multiprocess
+python examples/shuffle_test.py --multiprocess
 """
 
 import argparse
@@ -9,10 +9,7 @@ import logging
 import os
 
 import curl
-from curl.config import cfg
-from examples.multiprocess_launcher import MultiProcessLauncher
-from curl.config import cfg
-import curl.communicator as comm
+from multiprocess_launcher import MultiProcessLauncher
 
 def get_args():
     parser = argparse.ArgumentParser(description="Curl LLM Inference")
@@ -57,11 +54,14 @@ def run_shuffle(cfg_file, device=None):
     x_enc = curl.cryptensor([1, 2, 3, 4, 5, 6])
     print("x_enc :", x_enc.get_plain_text())
 
-    y_enc, p = x_enc.shuffle()
-    print("y_enc :", y_enc.get_plain_text())
+    g = x_enc.gelu()
+    print("g :", g.get_plain_text())
 
-    z_enc = y_enc.unshuffle(p)
-    print("z_enc :", z_enc.get_plain_text())
+    # y_enc, p = x_enc.shuffle()
+    # print("y_enc :", y_enc.get_plain_text())
+    #
+    # z_enc = y_enc.unshuffle(p)
+    # print("z_enc :", z_enc.get_plain_text())
 
 
 def _run_experiment(args):

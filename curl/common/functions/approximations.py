@@ -11,8 +11,12 @@ import pywt
 
 import curl
 import torch
+
+from curl.common.util import torch_cat
 from curl.config import cfg
 from curl.cuda import CUDALongTensor
+
+import curl.communicator as comm
 
 __all__ = [
     "exp",
@@ -1092,6 +1096,19 @@ def gelu(self):
     elif method == "erf":
         gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
         return gelu
+    elif method == "split":
+        shuffled, inv_perm = self.shuffle()
+        n = comm.get().get_world_size()
+        split = shuffled.split(shuffled.size(0) // n)
+        local_gelu = list(curl.cryptensor(torch.zeros(shuffled.size())).split(shuffled.size(0) // n))
+        # TODO: Parallelize following loop
+        for i in range(n):
+            revealed = split[i].get_plain_text(dst=i)
+            if comm.get().get_rank() == i:
+                clear_gelu = revealed * (1 + (revealed / math.sqrt(2)).erf()) / 2
+                local_gelu[i].share += split[i].encoder.encode(clear_gelu)
+        gelu = curl.cat(local_gelu)
+        return gelu.unshuffle(inv_perm)
     else:
         raise ValueError(f"Unrecognized method {method} for gelu")
 

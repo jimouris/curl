@@ -301,7 +301,7 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
             import curl
 
             # dispatch torch.{cat,stack} call on CrypTensor to CrypTen:
-            return getattr(crypten, STATIC_FUNCTION_MAPPING[func])(*args, **kwargs)
+            return getattr(curl, STATIC_FUNCTION_MAPPING[func])(*args, **kwargs)
         else:
             raise NotImplementedError(
                 f"CrypTen does not support torch function {func}."

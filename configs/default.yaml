@@ -87,7 +87,8 @@ functions:
   erf_lut_max_bits: 2 # [-4, 4]
 
   # gelu configuration:
-  gelu_method: "bior"
+  gelu_method: "split"
+  # gelu_method: "bior"
   # gelu_method: "bior-lut-only"
   gelu_haar_size_bits: 4
   gelu_bior_size_bits: 4
