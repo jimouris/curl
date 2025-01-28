@@ -13,94 +13,87 @@ encoder:
 functions:
   max_method: "log_reduction"
 
-  # exponential function
-  exp_method: "limit"
-  exp_iterations: 8
-  exp_haar_size_bits: 5
-  exp_bior_size_bits: 5
-  exp_lut_max_bits: 6
-  exp_all_neg: True
-  exp_neg_lut_size: 256 # 2^8
+  exp:
+    method: "limit"
+    iterations: 8
+    haar_size_bits: 5
+    bior_size_bits: 5
+    lut_max_bits: 6
+    all_neg: True
+    neg_lut_size: 256 # 2^8
 
-  # log configuration
-  log_method: "bior"
-  log_iterations: 2
-  log_exp_iterations: 8
-  log_order: 8
-  log_haar_size_bits: 8
-  log_bior_size_bits: 7
-  log_lut_max_bits: 6
+  log:
+    method: "bior"
+    iterations: 2
+    exp_iterations: 8
+    order: 8
+    haar_size_bits: 8
+    bior_size_bits: 7
+    lut_max_bits: 6
 
-  # reciprocal configuration
-  reciprocal_method: "haar"
-  reciprocal_nr_iters: 10
-  reciprocal_log_iters: 1
-  reciprocal_all_pos: True
-  reciprocal_initial: null
-  reciprocal_haar_size_bits: 8
-  reciprocal_bior_size_bits: 7
-  reciprocal_lut_max_bits: 6
+  reciprocal:
+    method: "haar"
+    nr_iters: 10
+    log_iters: 1
+    all_pos: True
+    initial: null
+    haar_size_bits: 8
+    bior_size_bits: 7
+    lut_max_bits: 6
 
-  # sqrt configuration
-  sqrt_method: "bior"
-  sqrt_nr_iters: 5
-  sqrt_nr_initial: null
-  sqrt_haar_size_bits: 7
-  sqrt_bior_size_bits: 7
-  sqrt_lut_max_bits: 8
+  sqrt:
+    method: "bior"
+    nr_iters: 5
+    nr_initial: null
+    haar_size_bits: 7
+    bior_size_bits: 7
+    lut_max_bits: 8
 
-  # inv_sqrt configuration
-  inv_sqrt_method: "tailored_haar"
-  # inv_sqrt_method: "haar"
-  inv_sqrt_haar_size_bits: 11
-  inv_sqrt_bior_size_bits: 11
-  inv_sqrt_lut_max_bits: 8
-  inv_sqrt_tailored_0_lut_max_bits: 0
-  inv_sqrt_tailored_0_haar_size_bits: 12
-  inv_sqrt_tailored_1_lut_max_bits: 8
-  inv_sqrt_tailored_1_haar_size_bits: 8
+  inv_sqrt:
+    method: "tailored_haar" # "haar"
+    haar_size_bits: 11
+    bior_size_bits: 11
+    lut_max_bits: 8
+    tailored_0_lut_max_bits: 0
+    tailored_0_haar_size_bits: 12
+    tailored_1_lut_max_bits: 8
+    tailored_1_haar_size_bits: 8
 
-  # sigmoid / tanh configuration
-  # sigmoid_tanh_method: "bior-lut-only"
-  sigmoid_tanh_method: "haar"
-  sigmoid_tanh_terms: 32
-  sigmoid_tanh_haar_size_bits: 6
-  sigmoid_tanh_bior_size_bits: 5
-  sigmoid_lut_max_bits: 4 # [-16, 16] for "bior"
-  # sigmoid_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
-  tanh_lut_max_bits: 3 # [-8, 8]
+  sigmoid_tanh:
+    method: "haar" # "bior-lut-only"
+    terms: 32
+    haar_size_bits: 6
+    bior_size_bits: 5
+    sigmoid_lut_max_bits: 4 # [-16, 16] for "bior"
+    # sigmoid_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
+    tanh_lut_max_bits: 3 # [-8, 8]
 
-  # trigonometry configuration
-  # trigonometry_method: "bior-lut-only"
-  trigonometry_method: "bior"
-  trigonometry_haar_size_bits: 5
-  trigonometry_bior_size_bits: 5
-  trigonometry_lut_max_bits: 6
-  trig_iterations: 10
+  trigonometry:
+    method: "bior" # "bior-lut-only"
+    haar_size_bits: 5
+    bior_size_bits: 5
+    lut_max_bits: 6
+    iterations: 10
 
-  # error function configuration:
-  # erf_method: "bior-lut-only"
-  erf_method: "bior"
-  erf_iterations: 8
-  erf_haar_size_bits: 5
-  erf_bior_size_bits: 7
-  erf_lut_max_bits: 2 # [-4, 4]
+  erf:
+    method: "bior" # "bior-lut-only"
+    iterations: 8
+    haar_size_bits: 5
+    bior_size_bits: 7
+    lut_max_bits: 2 # [-4, 4]
 
-  # gelu configuration:
-  gelu_method: "fission"
-  # gelu_method: "bior"
-  # gelu_method: "bior-lut-only"
-  gelu_haar_size_bits: 4
-  gelu_bior_size_bits: 4
-  gelu_lut_max_bits: 2
+  gelu:
+    method: "fission" # "haar, "haar-lut-only", "bior", "bior-lut-only"
+    haar_size_bits: 4
+    bior_size_bits: 4
+    lut_max_bits: 2
 
-  # silu configuration:
-  silu_method: "bior"
-  # silu_method: "bior-lut-only"
-  silu_haar_size_bits: 4
-  silu_bior_size_bits: 6
-  silu_lut_max_bits: 4 # [-16, 16] for "bior"
-  # silu_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
+  silu:
+    method: "haar" # "bior", "haar-lut-only", "bior-lut-only"
+    haar_size_bits: 4
+    bior_size_bits: 6
+    lut_max_bits: 4 # [-16, 16] for "bior"
+  # lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
 mpc:
   active_security: False
   provider: "TTP"
