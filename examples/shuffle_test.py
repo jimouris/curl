@@ -48,21 +48,21 @@ def get_config(args):
     return cfg_file
 
 def run_shuffle(cfg_file, device=None):
-    # First cold run.
     curl.init(cfg_file, device=device)
 
-    x_enc = curl.cryptensor([1, 2, 3, 4, 5, 6])
-    print("x_enc :", x_enc.get_plain_text())
-
-    g = x_enc.gelu()
-    print("g :", g.get_plain_text())
-
-    # y_enc, p = x_enc.shuffle()
-    # print("y_enc :", y_enc.get_plain_text())
-    #
-    # z_enc = y_enc.unshuffle(p)
-    # print("z_enc :", z_enc.get_plain_text())
-
+    tests = [
+        curl.cryptensor([1, 2, 3, 4, 5, 6, 7, 8]),
+        curl.cryptensor([[1, 2, 3, 4, 5, 6, 7, 8]]),
+        curl.cryptensor([[1, 2], [3, 4], [5, 6], [7, 8]]),
+        curl.cryptensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]),
+        curl.cryptensor([[1], [2], [3], [4], [5], [6], [7], [8]]),
+    ]
+    for x_enc in tests:
+        curl.print("x_enc :", x_enc.get_plain_text())
+        y_enc = x_enc.gelu()
+        assert y_enc.share.shape == x_enc.shape
+        curl.print("y_enc :", y_enc.get_plain_text())
+        curl.print("----")
 
 def _run_experiment(args):
     # Only Rank 0 will display logs.
@@ -73,7 +73,7 @@ def _run_experiment(args):
 
     cfg_file = get_config(args)
     run_shuffle(cfg_file)
-    print('Done')
+    curl.print('Done')
 
 def main():
     args = get_args()

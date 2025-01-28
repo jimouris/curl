@@ -360,17 +360,29 @@ def permute_reveal_evaluate_share(self, func):
     Returns:
         The processed tensor with the function applied to each split.
     """
-    shuffled, inv_perm = self.shuffle()
-    n = comm.get().get_world_size()
-    split = shuffled.split(shuffled.size(0) // n)
-    local_results = list(curl.cryptensor(torch.zeros(shuffled.size())).split(shuffled.size(0) // n))
-    # TODO: Parallelize following loop
+    shuffled, inv_perm = self.shuffle()  # Shuffle the tensor
+    n = comm.get().get_world_size()  # Number of processes
+    dim = shuffled.share.ndim - 1  # Dimension to split along
+
+    # Split the tensor along the specified dimension
+    split_size = shuffled.size(dim) // n
+    # This is for corner cases where the last dimension is 1: e.g., [[1], [2], ...]
+    if split_size == 0:
+        dim -= 1
+        split_size = shuffled.size(dim) // n
+    split = shuffled.split(split_size, dim=dim)
+
+    # Initialize local results with the correct split sizes
+    local_results = [
+        curl.cryptensor(torch.zeros_like(split[i]._tensor)) for i in range(n)
+    ]
+    # Process each split sequentially
     for i in range(n):
-        revealed = split[i].get_plain_text(dst=i)
+        revealed = split[i].get_plain_text(dst=i)  # Reveal the split for the current rank
         if comm.get().get_rank() == i:
-            clear_result = func(revealed)
-            local_results[i].share += split[i].encoder.encode(clear_result)
-    result = curl.cat(local_results)
+            clear_result = func(revealed)  # Apply the function
+            local_results[i].share += split[i].encoder.encode(clear_result)  # Encode and add to local results
+    result = curl.cat(local_results, dim=dim)
     return result.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):
