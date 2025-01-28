@@ -349,6 +349,29 @@ class LookupTables:
                 cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
         print(f'[Device] LUTs initialized for {device}\n')
 
+def permute_reveal_evaluate_share(self, func):
+    """
+    Applies the permute and split reveal technique.
+
+    Args:
+        self: The input tensor to be processed.
+        func: A function that takes a tensor as input and returns the transformed tensor.
+
+    Returns:
+        The processed tensor with the function applied to each split.
+    """
+    shuffled, inv_perm = self.shuffle()
+    n = comm.get().get_world_size()
+    split = shuffled.split(shuffled.size(0) // n)
+    local_results = list(curl.cryptensor(torch.zeros(shuffled.size())).split(shuffled.size(0) // n))
+    # TODO: Parallelize following loop
+    for i in range(n):
+        revealed = split[i].get_plain_text(dst=i)
+        if comm.get().get_rank() == i:
+            clear_result = func(revealed)
+            local_results[i].share += split[i].encoder.encode(clear_result)
+    result = curl.cat(local_results)
+    return result.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""
@@ -1096,19 +1119,8 @@ def gelu(self):
     elif method == "erf":
         gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
         return gelu
-    elif method == "split":
-        shuffled, inv_perm = self.shuffle()
-        n = comm.get().get_world_size()
-        split = shuffled.split(shuffled.size(0) // n)
-        local_gelu = list(curl.cryptensor(torch.zeros(shuffled.size())).split(shuffled.size(0) // n))
-        # TODO: Parallelize following loop
-        for i in range(n):
-            revealed = split[i].get_plain_text(dst=i)
-            if comm.get().get_rank() == i:
-                clear_gelu = revealed * (1 + (revealed / math.sqrt(2)).erf()) / 2
-                local_gelu[i].share += split[i].encoder.encode(clear_gelu)
-        gelu = curl.cat(local_gelu)
-        return gelu.unshuffle(inv_perm)
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, lambda x: x * (1 + (x / math.sqrt(2)).erf()) / 2)
     else:
         raise ValueError(f"Unrecognized method {method} for gelu")
 
