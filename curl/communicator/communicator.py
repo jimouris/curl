@@ -103,6 +103,10 @@ class Communicator:
         """Returns the size of the world."""
         raise NotImplementedError("get_world_size is not implemented")
 
+    def get_evaluator_size(self):
+        """Returns the size of the eval."""
+        raise NotImplementedError("get_evaluator_size is not implemented")
+
     def get_rank(self):
         """Returns the rank of the current process."""
         raise NotImplementedError("get_rank is not implemented")

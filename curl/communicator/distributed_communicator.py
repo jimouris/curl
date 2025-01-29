@@ -34,13 +34,14 @@ class DistributedCommunicator(Communicator):
         # no need to do anything if we already initialized the communicator:
         if not dist.is_initialized():
             # get configuration variables from environments:
-            for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
+            for key in ["distributed_backend", "rendezvous", "world_size", "evaluator_size", "rank"]:
                 if key.upper() not in os.environ:
                     raise ValueError("Environment variable %s must be set." % key)
                 setattr(self, key.lower(), os.environ[key.upper()])
 
             # make sure world size and rank are integers; comms stats are reset:
             self.world_size = int(self.world_size)
+            self.evaluator_size = int(self.evaluator_size)
             self.rank = int(self.rank)
             self.reset_communication_stats()
             self._name = f"rank{self.rank}"
@@ -54,7 +55,7 @@ class DistributedCommunicator(Communicator):
             dist.init_process_group(
                 backend=self.distributed_backend,
                 init_method=self.rendezvous,
-                world_size=total_ws,
+                world_size=total_ws + self.evaluator_size,
                 rank=self.rank,
             )
 
@@ -62,6 +63,7 @@ class DistributedCommunicator(Communicator):
             if total_ws > 1:
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
             self.main_group = dist.new_group(list(range(self.world_size)))
+            self.eval_group = dist.new_group(list(range(self.world_size)) + list(range(total_ws, total_ws + self.evaluator_size)))
             self.ttp_initialized = init_ttp
 
     @classmethod
@@ -71,7 +73,7 @@ class DistributedCommunicator(Communicator):
         return dist.is_initialized()
 
     @classmethod
-    def initialize(cls, rank, world_size, init_ttp=False):
+    def initialize(cls, rank, world_size, evaluator_size, init_ttp=False):
         import os
 
         if os.name == "nt":
@@ -88,6 +90,7 @@ class DistributedCommunicator(Communicator):
             "DISTRIBUTED_BACKEND": "gloo",
             "RENDEZVOUS": f"file:///tmp/{randomized_path}",
             "WORLD_SIZE": world_size,
+            "EVALUATOR_SIZE": evaluator_size,
             "RANK": rank,
         }
         for key, val in default_args.items():
@@ -108,6 +111,7 @@ class DistributedCommunicator(Communicator):
             )
         dist.destroy_process_group(cls.instance.main_group)
         dist.destroy_process_group(cls.instance.ttp_group)
+        dist.destroy_process_group(cls.instance.eval_group)
         dist.destroy_process_group()
         cls.instance = None
 
@@ -326,6 +330,11 @@ class DistributedCommunicator(Communicator):
         """Returns the size of the world."""
         assert dist.is_initialized(), "initialize the communicator first"
         return self.world_size
+
+    def get_evaluators_size(self):
+        """Returns the size of the evaluators"""
+        assert dist.is_initialized(), "initialize the communicator first"
+        return self.evaluator_size
 
     def get_rank(self):
         """Returns the rank of the current process."""

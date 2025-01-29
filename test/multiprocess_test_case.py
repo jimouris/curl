@@ -87,6 +87,7 @@ class MultiProcessTestCase(unittest.TestCase):
     MAIN_PROCESS_RANK = -1
     DEFAULT_DEVICE = "cpu"
     DEFAULT_WORLD_SIZE = 2
+    DEFAULT_EVALUATOR_SIZE = 0
 
     @staticmethod
     def join_or_run(fn):
@@ -117,12 +118,13 @@ class MultiProcessTestCase(unittest.TestCase):
         self.rank = self.MAIN_PROCESS_RANK
         self.mp_context = multiprocessing.get_context("spawn")
 
-    def setUp(self, world_size=DEFAULT_WORLD_SIZE):
+    def setUp(self, world_size=DEFAULT_WORLD_SIZE, evaluator_size=DEFAULT_EVALUATOR_SIZE):
         super(MultiProcessTestCase, self).setUp()
 
         curl.debug.configure_logging()
 
         self.world_size = world_size
+        self.evaluator_size = evaluator_size
         self.default_tolerance = 0.5
         self.queue = self.mp_context.Queue()
 
@@ -130,7 +132,7 @@ class MultiProcessTestCase(unittest.TestCase):
         # chance to initialize themselves in the new process
         if self.rank == self.MAIN_PROCESS_RANK:
             self.file = tempfile.NamedTemporaryFile(delete=True).name
-            self.processes = [self._spawn_process(rank) for rank in range(world_size)]
+            self.processes = [self._spawn_process(rank) for rank in range(world_size + evaluator_size)]
             if curl.mpc.ttp_required():
                 self.processes += [self._spawn_ttp()]
 
@@ -152,6 +154,7 @@ class MultiProcessTestCase(unittest.TestCase):
     def _spawn_ttp(self):
         communicator_args = {
             "WORLD_SIZE": self.world_size,
+            "EVALUATOR_SIZE": self.evaluator_size,
             "RANK": self.world_size,
             "RENDEZVOUS": "file://%s" % self.file,
             "BACKEND": "gloo",
@@ -171,18 +174,19 @@ class MultiProcessTestCase(unittest.TestCase):
         process = self.mp_context.Process(
             target=self.__class__._run,
             name=name,
-            args=(test_name, cfg.config, rank, self.world_size, self.file, self.queue),
+            args=(test_name, cfg.config, rank, self.world_size, self.evaluator_size, self.file, self.queue),
         )
         process.start()
         return process
 
     @classmethod
-    def _run(cls, test_name, config, rank, world_size, file, exception_queue):
+    def _run(cls, test_name, config, rank, world_size, evaluator_size, file, exception_queue):
         self = cls(test_name)
 
         self.file = file
         self.rank = int(rank)
         self.world_size = world_size
+        self.evaluator_size = evaluator_size
 
         # Copy config to child processes.
         cfg.set_config(config)
@@ -190,6 +194,7 @@ class MultiProcessTestCase(unittest.TestCase):
         # set environment variables:
         communicator_args = {
             "WORLD_SIZE": self.world_size,
+            "EVALUATOR_SIZE": self.evaluator_size,
             "RANK": self.rank,
             "RENDEZVOUS": "file://%s" % self.file,
             "BACKEND": "gloo",

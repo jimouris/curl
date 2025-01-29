@@ -81,8 +81,12 @@ def init(config_file=None, party_name=None, device=None):
         # Initialize the LUTs for the computing parties
         curl.common.functions.approximations.LookupTables(device=device)
 
-def init_thread(rank, world_size):
-    comm._init(use_threads=True, rank=rank, world_size=world_size)
+        if comm.get().get_evaluators_size() > 0:
+            curl.evaluator.EvaluatorClient._init()
+
+
+def init_thread(rank, world_size, evaluator_size=0):
+    comm._init(use_threads=True, rank=rank, world_size=world_size, evaluator_size=evaluator_size)
     _setup_prng()
 
 
@@ -148,7 +152,6 @@ def cryptensor(*args, cryptensor_type=None, **kwargs):
     Factory function to return encrypted tensor of given `cryptensor_type`. If no
     `cryptensor_type` is specified, the default type is used.
     """
-
     # determine CrypTensor type to use:
     if cryptensor_type is None:
         cryptensor_type = get_default_cryptensor_type()
@@ -224,14 +227,14 @@ def _setup_prng():
 
 def _sync_seeds(next_seed, local_seed, global_seed):
     """
-    Sends random seed to next party, recieve seed from prev. party, and broadcast global seed
+    Sends random seed to next party, receive seed from prev. party, and broadcast global seed
 
     After seeds are distributed. One seed is created for each party to coordinate seeds
     across cuda devices.
     """
     global generators
 
-    # Populated by recieving the previous party's next_seed (irecv)
+    # Populated by receiving the previous party's next_seed (irecv)
     prev_seed = torch.tensor([0], dtype=torch.long)
 
     # Send random seed to next party, receive random seed from prev party
@@ -252,7 +255,7 @@ def _sync_seeds(next_seed, local_seed, global_seed):
     prev_seed = prev_seed.item()
     next_seed = next_seed.item()
 
-    # Broadcase global generator - All parties share one global generator for sync'd rng
+    # Broadcast global generator - All parties share one global generator for sync'd rng
     global_seed = comm.get().broadcast(global_seed, 0).item()
 
     # Create one of each seed per party
@@ -598,6 +601,7 @@ __all__ = [
     "enable_grad",
     "set_grad_enabled",
     "debug",
+    "evaluator",
     "fill_cache",
     "generators",
     "init",

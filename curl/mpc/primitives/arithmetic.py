@@ -164,6 +164,7 @@ class ArithmeticSharedTensor:
         this number while the other subtracts this number.
         """
         from curl import generators
+        print(f"{comm.get().get_rank()}: PRZS {size} {device}")
 
         tensor = ArithmeticSharedTensor(src=SENTINEL)
         if device is None:

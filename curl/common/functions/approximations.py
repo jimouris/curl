@@ -17,6 +17,7 @@ from curl.config import cfg
 from curl.cuda import CUDALongTensor
 
 import curl.communicator as comm
+from curl.evaluator.evaluator import EvaluatorClient
 
 __all__ = [
     "exp",
@@ -355,7 +356,7 @@ def permute_reveal_evaluate_share(self, func):
 
     Args:
         self: The input tensor to be processed.
-        func: A function that takes a tensor as input and returns the transformed tensor.
+        func: A function name that takes a tensor as input and returns the transformed tensor.
 
     Returns:
         The processed tensor with the function applied to each split.
@@ -373,16 +374,16 @@ def permute_reveal_evaluate_share(self, func):
     split = shuffled.split(split_size, dim=dim)
 
     # Initialize local results with the correct split sizes
-    local_results = [
-        curl.cryptensor(torch.zeros_like(split[i]._tensor)) for i in range(n)
-    ]
+    local_results = [0] * n
     # Process each split sequentially
     for i in range(n):
-        revealed = split[i].get_plain_text(dst=i)  # Reveal the split for the current rank
-        if comm.get().get_rank() == i:
-            clear_result = func(revealed)  # Apply the function
-            local_results[i].share += split[i].encoder.encode(clear_result)  # Encode and add to local results
-    result = curl.cat(local_results, dim=dim)
+        print(f"Processing split {i}... {split[i]}")
+        local_results[i] = EvaluatorClient.get().evaluator_request(func, split[i])
+    # result = curl.cat(local_results, dim=dim)
+    print("Local Results: ", local_results)
+    result = torch.cat(local_results, dim=dim)
+    print("Result : ", result)
+    result = curl.cryptensor(result.float() / 2**shuffled.encoder._precision_bits)
     return result.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):
@@ -1132,7 +1133,7 @@ def gelu(self):
         gelu = self * (1 + (self / math.sqrt(2)).erf()) / 2
         return gelu
     elif method == "fission":
-        return permute_reveal_evaluate_share(self, lambda x: x * (1 + (x / math.sqrt(2)).erf()) / 2)
+        return permute_reveal_evaluate_share(self, "gelu")
     else:
         raise ValueError(f"Unrecognized method {method} for gelu")
 

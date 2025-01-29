@@ -16,9 +16,10 @@ import curl
 from curl.communicator import DistributedCommunicator
 
 
-def _launch(func, rank, world_size, rendezvous_file, queue, func_args, func_kwargs):
+def _launch(func, rank, world_size, evaluator_size, rendezvous_file, queue, func_args, func_kwargs):
     communicator_args = {
         "WORLD_SIZE": world_size,
+        "EVALUATOR_SIZE": evaluator_size,
         "RANK": rank,
         "RENDEZVOUS": "file://%s" % rendezvous_file,
         "DISTRIBUTED_BACKEND": "gloo",
@@ -33,13 +34,14 @@ def _launch(func, rank, world_size, rendezvous_file, queue, func_args, func_kwar
     queue.put((rank, return_value))
 
 
-def run_multiprocess(world_size, maxsize=None):
+def run_multiprocess(world_size, maxsize=None, evaluator_size=0):
     """Defines decorator to run function across multiple processes
 
     Args:
         world_size (int): number of parties / processes to initiate.
         maxsize: Enables the user to increase the size of returnable values
             (See https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Queue)
+        evaluator_size (int): number of evaluator parties / processes to initiate for Fission.
     """
 
     def decorator(func):
@@ -55,7 +57,7 @@ def run_multiprocess(world_size, maxsize=None):
             processes = [
                 multiprocessing.Process(
                     target=_launch,
-                    args=(func, rank, world_size, rendezvous_file, queue, args, kwargs),
+                    args=(func, rank, world_size, evaluator_size, rendezvous_file, queue, args, kwargs),
                 )
                 for rank in range(world_size)
             ]
@@ -69,6 +71,7 @@ def run_multiprocess(world_size, maxsize=None):
                             curl.mpc.provider.TTPServer,
                             world_size,
                             world_size,
+                            evaluator_size,
                             rendezvous_file,
                             queue,
                             (),
@@ -76,6 +79,24 @@ def run_multiprocess(world_size, maxsize=None):
                         ),
                     )
                 ]
+
+            # Initialize Fission Evaluators
+            processes += [
+                multiprocessing.Process(
+                    target=_launch,
+                    args=(
+                        curl.evaluator.EvaluatorServer,
+                        world_size + 1 + evaluator_rank,
+                        world_size,
+                        evaluator_size,
+                        rendezvous_file,
+                        queue,
+                        (),
+                        {},
+                    ),
+                )
+                for evaluator_rank in range(evaluator_size)
+            ]
 
             # This process will be forked and we need to re-initialize the
             # communicator in the children. If the parent process happened to
