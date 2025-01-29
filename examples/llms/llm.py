@@ -136,7 +136,9 @@ def run_llm(cfg_file, tensor_size, model, with_cache=False, communication=False,
         comm.get().set_verbosity(True)
 
     functions_data = cfg.config.get('functions', {})
-    filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
+    filtered_data = {
+        key: dict(value)['method'] for key, value in functions_data.items() if 'method' in dict(value)
+    }
     logging.info("\t'{}'".format(filtered_data))
     if with_cache:
         curl.trace()

@@ -16,23 +16,14 @@ def generate_random_ring_element(size, ring_size=(2**64), generator=None, **kwar
         device = torch.device("cpu") if device is None else device
         device = torch.device(device) if isinstance(device, str) else device
         generator = curl.generators["local"][device]
-    rand_value = torch.randint(
+    rand_element = torch.randint(
         -(ring_size // 2),
-        0,
+        (ring_size - 1) // 2,
         size,
         generator=generator,
         dtype=torch.long,
         **kwargs,
     )
-    rand_sign = torch.randint(
-        -1,
-        1,
-        size,
-        generator=generator,
-        dtype=torch.long,
-        **kwargs,
-    )
-    rand_element = (2 * rand_sign + 1) * (rand_value - rand_sign)
 
     if rand_element.is_cuda:
         return CUDALongTensor(rand_element)

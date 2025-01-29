@@ -11,7 +11,6 @@ import builtins
 import copy
 import logging
 import os
-import warnings
 
 import curl.common  # noqa: F401
 import curl.common.functions
@@ -72,6 +71,13 @@ def init(config_file=None, party_name=None, device=None):
     # Setup party name for file save / load
     if party_name is not None:
         comm.get().set_name(party_name)
+
+    if comm.get().get_evaluators_size() == 0:
+        for k, v in cfg.config.functions.items():
+            v = dict(v)
+            if v['method'] == 'fission':
+                logging.error(f"Fission needs at least one evaluator for {k}")
+                exit()
 
     # Setup seeds for Random Number Generation
     if comm.get().get_rank() < comm.get().get_world_size():

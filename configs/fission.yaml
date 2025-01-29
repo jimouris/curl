@@ -15,7 +15,7 @@ functions:
     method: "log_reduction"
 
   exp:
-    method: "limit"
+    method: "fission"
     iterations: 8
     haar_size_bits: 5
     bior_size_bits: 5
@@ -24,7 +24,7 @@ functions:
     neg_lut_size: 256 # 2^8
 
   log:
-    method: "bior"
+    method: "fission"
     iterations: 2
     exp_iterations: 8
     order: 8
@@ -33,7 +33,7 @@ functions:
     lut_max_bits: 6
 
   reciprocal:
-    method: "haar"
+    method: "fission"
     nr_iters: 10
     log_iters: 1
     all_pos: True
@@ -43,7 +43,7 @@ functions:
     lut_max_bits: 6
 
   sqrt:
-    method: "bior"
+    method: "fission"
     nr_iters: 5
     nr_initial: null
     haar_size_bits: 7
@@ -51,7 +51,7 @@ functions:
     lut_max_bits: 8
 
   inv_sqrt:
-    method: "tailored_haar" # "haar"
+    method: "fission"
     haar_size_bits: 11
     bior_size_bits: 11
     lut_max_bits: 8
@@ -61,7 +61,7 @@ functions:
     tailored_1_haar_size_bits: 8
 
   sigmoid_tanh:
-    method: "haar" # "bior-lut-only"
+    method: "fission"
     terms: 32
     haar_size_bits: 6
     bior_size_bits: 5
@@ -70,37 +70,37 @@ functions:
     tanh_lut_max_bits: 3 # [-8, 8]
 
   trigonometry:
-    method: "bior" # "bior-lut-only"
+    method: "fission"
     haar_size_bits: 5
     bior_size_bits: 5
     lut_max_bits: 6
     iterations: 10
 
   erf:
-    method: "bior" # "bior-lut-only"
+    method: "fission"
     iterations: 8
     haar_size_bits: 5
     bior_size_bits: 7
     lut_max_bits: 2 # [-4, 4]
 
   gelu:
-    method: "haar" # "haar-lut-only", "bior", "bior-lut-only"
+    method: "fission"
     haar_size_bits: 4
     bior_size_bits: 4
     lut_max_bits: 2
 
   silu:
-    method: "haar" # "bior", "haar-lut-only", "bior-lut-only"
+    method: "fission"
     haar_size_bits: 4
     bior_size_bits: 6
     lut_max_bits: 4 # [-16, 16] for "bior"
   # lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
 
   softmax:
-    method: "approximation"
+    method: "fission"
 
   log_softmax:
-    method: "approximation"
+    method: "fission"
 mpc:
   active_security: False
   provider: "TTP"
@@ -110,4 +110,3 @@ nn:
     protocol: "layer_estimation"
     skip_loss_forward: True
     cache_pred_size: True
-

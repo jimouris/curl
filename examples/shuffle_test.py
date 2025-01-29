@@ -60,7 +60,7 @@ def run_shuffle(cfg_file, device=None):
 
     tests = [
         curl.cryptensor([1, 2, 3, 4]),
-        curl.cryptensor([[1, 2, 3, 4, 5, 6]]),
+        curl.cryptensor([[1, 2, 3, 4]]),
         curl.cryptensor([[1, 2], [3, 4], [5, 6], [7, 8]]),
         curl.cryptensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]),
         curl.cryptensor([[1], [2], [3], [4], [5], [6], [7], [8]]),

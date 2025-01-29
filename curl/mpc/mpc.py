@@ -330,11 +330,15 @@ class MPCTensor(CrypTensor):
 
     def shuffle(self):
         """Shuffle the tensor."""
-        return self._tensor.shuffle()
+        result = self.clone()
+        result._tensor, inv_permutation = result._tensor.shuffle()
+        return result, inv_permutation
 
     def unshuffle(self, inv_permutation):
         """Unshuffle the tensor."""
-        return self._tensor.unshuffle(inv_permutation)
+        result = self.clone()
+        result._tensor.unshuffle(inv_permutation)
+        return result
 
 UNARY_FUNCTIONS = [
     "avg_pool2d",

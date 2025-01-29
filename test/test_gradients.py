@@ -251,7 +251,7 @@ class TestGradients:
                 if method is None:
                     self._check_forward_backward(reduction, tensor)
                 else:
-                    with cfg.temp_override({"functions.max_method": method}):
+                    with cfg.temp_override({"functions.max.method": method}):
                         self._check_forward_backward(reduction, tensor)
 
                 # Check dim 0 if tensor is 0-dimensional
@@ -262,7 +262,7 @@ class TestGradients:
                     if method is None:
                         self._check_forward_backward(reduction, tensor, dim=dim)
                     else:
-                        with cfg.temp_override({"functions.max_method": method}):
+                        with cfg.temp_override({"functions.max.method": method}):
                             self._check_forward_backward(reduction, tensor, dim=dim)
 
                     # check when keepdim is provided as a kwarg
@@ -275,7 +275,7 @@ class TestGradients:
                                 reduction, tensor, dim=dim, keepdim=keepdim
                             )
                         else:
-                            with cfg.temp_override({"functions.max_method": method}):
+                            with cfg.temp_override({"functions.max.method": method}):
                                 self._check_forward_backward(
                                     reduction, tensor, dim, keepdim=keepdim
                                 )

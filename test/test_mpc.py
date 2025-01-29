@@ -884,7 +884,7 @@ class TestMPC:
             encrypted_tensor = MPCTensor(tensor)
             for comp in ["max", "min"]:
                 reference = getattr(tensor, comp)()
-                with cfg.temp_override({"functions.max_method": method}):
+                with cfg.temp_override({"functions.max.method": method}):
                     encrypted_out = getattr(encrypted_tensor, comp)()
                 self._check(encrypted_out, reference, "%s reduction failed" % comp)
 
@@ -893,7 +893,7 @@ class TestMPC:
                         reference = getattr(tensor, comp)(dim, keepdim=keepdim)
 
                         # Test with one_hot = False
-                        with cfg.temp_override({"functions.max_method": method}):
+                        with cfg.temp_override({"functions.max.method": method}):
                             encrypted_out = getattr(encrypted_tensor, comp)(
                                 dim, keepdim=keepdim, one_hot=False
                             )
@@ -922,7 +922,7 @@ class TestMPC:
                         )
 
                         # Test indices with one_hot = True
-                        with cfg.temp_override({"functions.max_method": method}):
+                        with cfg.temp_override({"functions.max.method": method}):
                             encrypted_out = getattr(encrypted_tensor, comp)(
                                 dim, keepdim=keepdim, one_hot=True
                             )
@@ -983,7 +983,7 @@ class TestMPC:
                 value = getattr(tensor, cmp)()
 
                 # test with one_hot = False
-                with cfg.temp_override({"functions.max_method": method}):
+                with cfg.temp_override({"functions.max.method": method}):
                     encrypted_out = getattr(encrypted_tensor, comp)(one_hot=False)
 
                 # Must index into tensor since ties are broken randomly
@@ -997,7 +997,7 @@ class TestMPC:
                     self.assertTrue(decrypted_val.eq(value).all().item())
 
                 # test with one_hot = False
-                with cfg.temp_override({"functions.max_method": method}):
+                with cfg.temp_override({"functions.max.method": method}):
                     encrypted_out = getattr(encrypted_tensor, comp)(one_hot=True)
                 one_hot_indices = (tensor == value).float()
                 decrypted_out = encrypted_out.get_plain_text()
@@ -1010,7 +1010,7 @@ class TestMPC:
                         values, indices = getattr(tensor, cmp)(dim, keepdim=keepdim)
 
                         # test with one_hot = False
-                        with cfg.temp_override({"functions.max_method": method}):
+                        with cfg.temp_override({"functions.max.method": method}):
                             encrypted_out = getattr(encrypted_tensor, comp)(
                                 dim, keepdim=keepdim, one_hot=False
                             )
@@ -1027,7 +1027,7 @@ class TestMPC:
                         self.assertTrue(decrypted_val.eq(reference).all().item())
 
                         # test with one_hot = True
-                        with cfg.temp_override({"functions.max_method": method}):
+                        with cfg.temp_override({"functions.max.method": method}):
                             encrypted_out = getattr(encrypted_tensor, comp)(
                                 dim, keepdim=keepdim, one_hot=True
                             )

@@ -121,7 +121,7 @@ class DistributedCommunicator(Communicator):
         assert dist.is_initialized(), "initialize the communicator first"
         if group is None:
             group = self.main_group
-        dist.send(tensor.data, dst, group)
+        dist.send(tensor.data, dst, group=group)
 
     @_logging
     def recv(self, tensor, src=None, group=None):

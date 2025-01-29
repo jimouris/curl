@@ -348,19 +348,20 @@ class LookupTables:
                 cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
         print(f'[Device] LUTs initialized for {device}\n')
 
-def permute_reveal_evaluate_share(self, func):
+def permute_reveal_evaluate_share(self, func, dim=None):
     """
     Applies the permute and split reveal technique.
 
     Args:
         self: The input tensor to be processed.
         func: A function name that takes a tensor as input and returns the transformed tensor.
+        dim: The dimension along which to split-reveal.
 
     Returns:
         The processed tensor with the function applied to each split.
     """
     shuffled, inv_perm = self.shuffle()  # Shuffle the tensor
-    shuffled = EvaluatorClient.get().evaluator_request(func, shuffled)
+    shuffled = EvaluatorClient.get().evaluator_request(func, shuffled, dim)
     return shuffled.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):
@@ -442,6 +443,8 @@ def exp(self):
         for _ in range(iters):
             result = result.square()
         return result
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "exp")
     else:
         raise ValueError(f"Invalid method {method} given for exp function")
 
@@ -515,6 +518,8 @@ def log(self, input_in_01=False, use_lut=False):
                 h = 1 - self * exp(-y)
                 y -= h.polynomial([1 / (i + 1) for i in range(order)])
         return y
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "log")
     else:
         raise ValueError(f"Invalid method {method} given for log function")
 
@@ -601,6 +606,8 @@ def reciprocal(self, input_in_01=False):
         log_iters = cfg.functions.reciprocal.log_iters
         with cfg.temp_override({"functions.log_iters": log_iters}):
             return exp(-log(self))
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "reciprocal")
     else:
         raise ValueError(f"Invalid method {method} given for reciprocal function")
 
@@ -663,6 +670,8 @@ def inv_sqrt(self):
         for _ in range(iters):
             y = y.mul_(3 - self * y.square()).div_(2)
         return y
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "inv_sqrt")
     else:
         raise ValueError(f"Invalid method {method} given for inv_sqrt function")
 
@@ -700,6 +709,8 @@ def sqrt(self):
             return msb.evaluate_bior_lut(luts.LUTs["sqrt_bior"], lsb, truncation)
     elif method == "NR":
         return inv_sqrt(self).mul_(self)
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "sqrt")
     else:
         raise ValueError(f"Invalid method {method} given for sqrt function")
 
@@ -783,6 +794,8 @@ def cossin(self):
             return cos, sin
     elif method == "NR":
         return self._eix()
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "cos"), permute_reveal_evaluate_share(self, "sin")
     else:
         raise ValueError(f"Invalid method {method} given for cossin function")
 
@@ -893,6 +906,8 @@ def sigmoid(self):
         # TODO: Support addition with different encoder scales
         # result = pos_output + ltz - 2 * pos_output * ltz
         return result
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "sigmoid")
     else:
         raise ValueError(f"Unrecognized method {method} for sigmoid")
 
@@ -970,6 +985,8 @@ def tanh(self):
 
         # truncate outside [-maxval, maxval]
         return out.hardtanh()
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "tanh")
     else:
         raise ValueError(f"Unrecognized method {method} for tanh")
 
@@ -1049,7 +1066,7 @@ def erf(self):
                 msb, lsb = self.egk_truncmod_pr(62, truncation)
             return msb.evaluate_bior_lut(luts.LUTs["erf_bior_lut_only"], lsb, truncation)
     elif method == "Taylor":
-        iters = cfg.functions.erf_iterations
+        iters = cfg.functions.erf.iterations
 
         output = self.clone()
         for n in range(1, iters + 1):
@@ -1057,6 +1074,8 @@ def erf(self):
             output = output.add(self.pos_pow(2 * n + 1).mul(multiplier))
         return output.mul(2.0 / math.sqrt(math.pi))
         # NOTE: This approximation is not unstable for large tensor values.
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "erf")
     else:
         raise ValueError(f"Unrecognized method {method} for erf")
 
@@ -1163,6 +1182,8 @@ def silu(self):
     elif method == "sigmoid":
         silu = self * self.sigmoid()
         return silu
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "silu")
     else:
         raise ValueError(f"Unrecognized method {method} for silu")
 
@@ -1176,14 +1197,19 @@ def softmax(self, dim, **kwargs):
     if self.size(dim) == 1:
         return self.new(torch.ones_like(self.data))
 
-    maximum_value = self.max(dim, keepdim=True)[0]
-    logits = self - maximum_value
-    with cfg.temp_override({"functions.exp.all_neg": True}):
-        numerator = logits.exp()
-    with cfg.temp_override({"functions.reciprocal.all_pos": True}):
-        inv_denominator = numerator.sum(dim, keepdim=True).reciprocal()
-    return numerator * inv_denominator
-
+    method = cfg.functions.softmax.method
+    if method == "approximation":
+        maximum_value = self.max(dim, keepdim=True)[0]
+        logits = self - maximum_value
+        with cfg.temp_override({"functions.exp.all_neg": True}):
+            numerator = logits.exp()
+        with cfg.temp_override({"functions.reciprocal.all_pos": True}):
+            inv_denominator = numerator.sum(dim, keepdim=True).reciprocal()
+        return numerator * inv_denominator
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "softmax")
+    else:
+        raise ValueError(f"Unrecognized method {method} for softmax")
 
 def log_softmax(self, dim, **kwargs):
     r"""Applies a softmax followed by a logarithm.
@@ -1199,8 +1225,12 @@ def log_softmax(self, dim, **kwargs):
     if self.size(dim) == 1:
         return self.new(torch.zeros_like(self.data))
 
-    maximum_value = self.max(dim, keepdim=True)[0]
-    logits = self - maximum_value
-    normalize_term = exp(logits).sum(dim, keepdim=True)
-    result = logits - normalize_term.log()
-    return result
+    method = cfg.functions.log_softmax.method
+    if method == "approximation":
+        maximum_value = self.max(dim, keepdim=True)[0]
+        logits = self - maximum_value
+        normalize_term = exp(logits).sum(dim, keepdim=True)
+        result = logits - normalize_term.log()
+        return result
+    elif method == "fission":
+        return permute_reveal_evaluate_share(self, "log_softmax")

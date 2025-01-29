@@ -32,6 +32,13 @@ def get_args():
         help="The number of parties to launch. Each party acts as its own process",
     )
     parser.add_argument(
+        "--evaluator_size",
+        "-es",
+        type=int,
+        default=0,
+        help="The number of eval parties to launch. Each party acts as its own process",
+    )
+    parser.add_argument(
         "-s",
         "--tensor_size",
         type=tuple_type,
@@ -102,11 +109,14 @@ def get_args():
 def get_config(args):
     cfg_file = curl.cfg.get_default_config_path()
     if args.approximations:
-        logging.info("Using Approximation Config:")
+        logging.info("Using Approximation Config")
         cfg_file = cfg_file.replace("default", "approximations")
     elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons:")
+        logging.info("Using config with LUTs without comparisons")
         cfg_file = cfg_file.replace("default", "llm_config")
+    elif args.evaluator_size:
+        logging.info("Using Fission config")
+        cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")
     return cfg_file
@@ -135,7 +145,7 @@ def main():
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, _run_experiment, args, cfg_file)
+        launcher = MultiProcessLauncher(args.world_size, args.evaluator_size, _run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()

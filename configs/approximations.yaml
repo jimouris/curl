@@ -11,7 +11,8 @@ encoder:
     # lut: "crypten"
     lut: "egk"
 functions:
-  max_method: "log_reduction"
+  max:
+    method: "log_reduction"
 
   exp:
     method: "limit"
@@ -93,6 +94,12 @@ functions:
     haar_size_bits: 4
     bior_size_bits: 6
     lut_max_bits: 4 # [-16, 16] for "bior"
+
+  softmax:
+    method: "approximation"
+
+  log_softmax:
+    method: "approximation"
 mpc:
   active_security: False
   provider: "TFP"

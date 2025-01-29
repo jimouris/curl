@@ -41,18 +41,21 @@ class EvaluatorClient:
             self.eval_group = comm.get().eval_group
             logging.info(f"EvaluatorClient {comm.get().get_rank()} initialized")
 
-        def evaluator_request(self, func_name, tensor, *args, **kwargs):
+        def evaluator_request(self, func_name, tensor, dim=None, *args, **kwargs):
             world_size = comm.get().get_world_size()
             assert (
                 comm.get().get_rank() < world_size
             ), "Only MPC parties communicate with the EvaluatorServers"
             n = comm.get().get_evaluators_size()  # Number of processes
-            dim = tensor.share.ndim - 1  # Dimension to split along
-            # Split the tensor along the specified dimension
-            split_size = tensor.size(dim) // n
-            # This is for corner cases where the last dimension is 1: e.g., [[1], [2], ...]
-            if split_size == 0:
-                dim -= 1
+            if dim is None:
+                dim = tensor.share.ndim - 1 # Dimension to split along
+                # Split the tensor along the specified dimension
+                split_size = tensor.size(dim) // n
+                # This is for corner cases where the last dimension is 1: e.g., [[1], [2], ...]
+                while split_size == 0 or dim > 0:
+                    dim -= 1
+                    split_size = tensor.size(dim) // n
+            else:
                 split_size = tensor.size(dim) // n
             split = tensor.split(split_size, dim=dim)
 
@@ -63,12 +66,10 @@ class EvaluatorClient:
                 evaluator_rank = world_size + 1 + i
 
                 message = {
-                    "function": func_name,
                     "tensor": split[i].share,
-                    "args": args,
-                    "kwargs": kwargs,
                 }
                 if comm.get().get_rank() == 0:
+                    message["function"] = func_name
                     message["precision"] = tensor.encoder.precision_bits
 
                 comm.get().send_obj(message, evaluator_rank, self.eval_group)
@@ -130,32 +131,20 @@ class EvaluatorServer:
         try:
             while True:
                 # Wait for next request from client
-
-                # TODO(memo, jimouris): loop here to receive from everyone
                 messages = []
                 for mpc_node in range(world_size):
-                    message = comm.get().recv_obj(mpc_node, self.eval_group)
-                    print(f'Evaluator Server({evaluator_rank - world_size - 1}): received {message=}')
-                    messages.append(message)
-
-                logging.info("Messages received: %s" % messages)
+                    messages.append(comm.get().recv_obj(mpc_node, self.eval_group))
 
                 message = messages[0]
                 if message == "terminate":
                     logging.info("Evaluator Server({evaluator_rank - world_size - 1}) shutting down.")
-                    return
-
+                    exit()
                 function = str(message["function"])
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): {function=}')
                 precision = message["precision"]
-                args = message["args"]
-                kwargs = message["kwargs"]
 
                 # Reconstruct
                 tensor = sum([message["tensor"] for message in messages])
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): reconstructed {tensor=}')
                 tensor = tensor.float() / 2**precision
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): decoded {tensor=}')
 
                 match function:
                     case "exp":
@@ -202,4 +191,3 @@ class EvaluatorServer:
         except RuntimeError as err:
             logging.info("Encountered Runtime error. Evaluator Server shutting down:")
             logging.info(f"{err}")
-
