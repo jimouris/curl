@@ -116,17 +116,21 @@ class DistributedCommunicator(Communicator):
         cls.instance = None
 
     @_logging
-    def send(self, tensor, dst):
+    def send(self, tensor, dst, group=None):
         """Sends the specified tensor to the destination dst."""
         assert dist.is_initialized(), "initialize the communicator first"
-        dist.send(tensor.data, dst, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        dist.send(tensor.data, dst, group)
 
     @_logging
-    def recv(self, tensor, src=None):
+    def recv(self, tensor, src=None, group=None):
         """Receives a tensor from an (optional) source src."""
         assert dist.is_initialized(), "initialize the communicator first"
         result = tensor.clone()
-        dist.recv(result.data, src=src, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        dist.recv(result.data, src=src, group=group)
         return result
 
     @_logging

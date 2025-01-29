@@ -12,11 +12,9 @@ import pywt
 import curl
 import torch
 
-from curl.common.util import torch_cat
 from curl.config import cfg
 from curl.cuda import CUDALongTensor
 
-import curl.communicator as comm
 from curl.evaluator.evaluator import EvaluatorClient
 
 __all__ = [
@@ -362,29 +360,9 @@ def permute_reveal_evaluate_share(self, func):
         The processed tensor with the function applied to each split.
     """
     shuffled, inv_perm = self.shuffle()  # Shuffle the tensor
-    n = comm.get().get_world_size()  # Number of processes
-    dim = shuffled.share.ndim - 1  # Dimension to split along
-
-    # Split the tensor along the specified dimension
-    split_size = shuffled.size(dim) // n
-    # This is for corner cases where the last dimension is 1: e.g., [[1], [2], ...]
-    if split_size == 0:
-        dim -= 1
-        split_size = shuffled.size(dim) // n
-    split = shuffled.split(split_size, dim=dim)
-
-    # Initialize local results with the correct split sizes
-    local_results = [0] * n
-    # Process each split sequentially
-    for i in range(n):
-        print(f"Processing split {i}... {split[i]}")
-        local_results[i] = EvaluatorClient.get().evaluator_request(func, split[i])
-    # result = curl.cat(local_results, dim=dim)
-    print("Local Results: ", local_results)
-    result = torch.cat(local_results, dim=dim)
-    print("Result : ", result)
-    result = curl.cryptensor(result.float() / 2**shuffled.encoder._precision_bits)
-    return result.unshuffle(inv_perm)
+    shuffled = EvaluatorClient.get().evaluator_request(func, shuffled)
+    print("Result : ", shuffled)
+    return shuffled.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""

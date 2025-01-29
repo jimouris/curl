@@ -134,6 +134,11 @@ class MultiProcessLauncher:
             assert (
                 process.exitcode == 0
             ), f"{process.name} has non-zero exit code {process.exitcode}"
+        # for process in self.eval_processes:
+        #     process.join()
+        #     assert (
+        #         process.exitcode == 0
+        #     ), f"{process.name} has non-zero exit code {process.exitcode}"
 
     def terminate(self):
         for process in self.processes:
