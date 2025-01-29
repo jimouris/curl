@@ -361,7 +361,6 @@ def permute_reveal_evaluate_share(self, func):
     """
     shuffled, inv_perm = self.shuffle()  # Shuffle the tensor
     shuffled = EvaluatorClient.get().evaluator_request(func, shuffled)
-    print("Result : ", shuffled)
     return shuffled.unshuffle(inv_perm)
 
 def _nexp_lut(self, method):

@@ -60,7 +60,6 @@ class EvaluatorClient:
             results = [0] * n
             # Process each split sequentially
             for i in range(n):
-                print(f"Processing split {i}... {split[i]}")
                 evaluator_rank = world_size + 1 + i
 
                 message = {
@@ -76,11 +75,9 @@ class EvaluatorClient:
 
             for i in range(n):
                 evaluator_rank = world_size + 1 + i
-                result = torch.empty(tensor.size(), dtype=torch.long, device=tensor.device)
+                result = torch.empty(split[i].size(), dtype=torch.long, device=tensor.device)
                 results[i] = comm.get().recv(result, evaluator_rank, self.eval_group)
-                curl.print(f'EvaluatorClient: received {results[i]=}')
             tensor.share = torch_cat(results, dim=dim)
-            curl.print(f'EvaluatorClient: tensor {tensor=}')
             return tensor
         
     @staticmethod
@@ -194,17 +191,13 @@ class EvaluatorServer:
                     case _:
                         raise ValueError("Unsupported function %s" % function)
 
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): result {result=}')
                 # Secret share the result back to the MPC nodes.
                 result = (result * 2**precision).long()
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): result {result=}')
                 for mpc_node in range(1, world_size):
                     share = generate_random_ring_element(result.size(), generator=self.generator)
                     comm.get().send(share, mpc_node, self.eval_group)
                     result -= share
-                    print(f'Evaluator Server {mpc_node}: share {share=}')
                 # Send the last share to MPC party 0.
-                print(f'Evaluator Server({evaluator_rank - world_size - 1}): result {result=}')
                 comm.get().send(result, 0, self.eval_group)
         except RuntimeError as err:
             logging.info("Encountered Runtime error. Evaluator Server shutting down:")
