@@ -7,9 +7,9 @@ encoder:
   precision_bits: 16
   trunc_method:
     # prod: "crypten"
-    prod: "egk"
+    prod: "fission"
     # lut: "crypten"
-    lut: "egk"
+    lut: "fission"
 functions:
   max:
     method: "log_reduction"

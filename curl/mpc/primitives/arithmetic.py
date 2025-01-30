@@ -400,8 +400,12 @@ class ArithmeticSharedTensor:
                 if self.encoder.scale > 1 and y.encoder.scale > 1:
                     if cfg.encoder.trunc_method.prod == "crypten":
                         return result.div_(result.encoder.scale)
-                    else:
+                    elif cfg.encoder.trunc_method.prod == "egk":
                         return result.egk_trunc_pr(62, result.encoder._precision_bits)
+                    elif cfg.encoder.trunc_method.prod == "fission":
+                        return result
+                    else:
+                        raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
                 elif self.encoder.scale > 1:
                     result.encoder = self.encoder
                 else:
