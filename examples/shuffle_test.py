@@ -60,7 +60,7 @@ def run_shuffle(cfg_file, device=None):
 
     tests = [
         curl.cryptensor([1, 2, 3, 4]),
-        curl.cryptensor([[1, 2, 3, 4]]),
+        curl.cryptensor([[1, 2, 3, 4, 5, 6]]),
         curl.cryptensor([[1, 2], [3, 4], [5, 6], [7, 8]]),
         curl.cryptensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]),
         curl.cryptensor([[1], [2], [3], [4], [5], [6], [7], [8]]),
@@ -77,8 +77,8 @@ def run_shuffle(cfg_file, device=None):
 def _run_experiment(args):
     # Only Rank 0 will display logs.
     level = logging.INFO
-    if "RANK" in os.environ and os.environ["RANK"] != "0":
-        level = logging.CRITICAL
+    # if "RANK" in os.environ and os.environ["RANK"] != "0":
+    #     level = logging.CRITICAL
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)

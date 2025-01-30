@@ -64,6 +64,7 @@ class DistributedCommunicator(Communicator):
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
             self.main_group = dist.new_group(list(range(self.world_size)))
             self.eval_group = dist.new_group(list(range(self.world_size)) + list(range(total_ws, total_ws + self.evaluator_size)))
+            self.eval_comm_group = dist.new_group([0] + list(range(total_ws, total_ws + self.evaluator_size)))
             self.ttp_initialized = init_ttp
 
     @classmethod
@@ -127,23 +128,27 @@ class DistributedCommunicator(Communicator):
     def recv(self, tensor, src=None, group=None):
         """Receives a tensor from an (optional) source src."""
         assert dist.is_initialized(), "initialize the communicator first"
-        result = tensor.clone()
         if group is None:
             group = self.main_group
+        result = tensor.clone()
         dist.recv(result.data, src=src, group=group)
         return result
 
     @_logging
-    def isend(self, tensor, dst):
+    def isend(self, tensor, dst, group=None):
         """Sends the specified tensor to the destination dst."""
         assert dist.is_initialized(), "initialize the communicator first"
-        return dist.isend(tensor.data, dst, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        return dist.isend(tensor.data, dst, group=group)
 
     @_logging
-    def irecv(self, tensor, src=None):
+    def irecv(self, tensor, src=None, group=None):
         """Receives a tensor from an (optional) source src."""
         assert dist.is_initialized(), "initialize the communicator first"
-        return dist.irecv(tensor.data, src=src, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        return dist.irecv(tensor.data, src=src, group=group)
 
     @_logging
     def scatter(self, scatter_list, src, size=None, device=None):
