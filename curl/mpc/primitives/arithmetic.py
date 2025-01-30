@@ -359,6 +359,10 @@ class ArithmeticSharedTensor:
             result = self.clone()
 
         if public:
+            if (not additive_func and cfg.encoder.trunc_method.prod == "fission"
+                    and result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
+                result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
+                result.encoder._precision_bits = cfg.encoder.precision_bits
             y = result.encoder.encode(y, device=self.device)
 
             if additive_func:  # ['add', 'sub']
@@ -372,6 +376,15 @@ class ArithmeticSharedTensor:
                 result.share = getattr(torch, op)(result.share, y, *args, **kwargs)
         elif private:
             if additive_func:  # ['add', 'sub', 'add_', 'sub_']
+                if cfg.encoder.trunc_method.prod == "fission":
+                    if (result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)
+                            and y.encoder.precision_bits == cfg.encoder.precision_bits):
+                        result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
+                        result.encoder._precision_bits = cfg.encoder.precision_bits
+                    elif (y.encoder.precision_bits == (2 * cfg.encoder.precision_bits)
+                          and result.encoder.precision_bits == cfg.encoder.precision_bits):
+                        y = y.egk_trunc_pr(62, cfg.encoder.precision_bits)
+                        y.encoder._precision_bits = cfg.encoder.precision_bits
                 # Re-encode if necessary:
                 if self.encoder.scale > y.encoder.scale:
                     y.encode_as_(result)
@@ -379,6 +392,14 @@ class ArithmeticSharedTensor:
                     result.encode_as_(y)
                 result.share = getattr(result.share, op)(y.share)
             else:  # ['mul', 'matmul', 'convNd', 'conv_transposeNd']
+                if (cfg.encoder.trunc_method.prod == "fission"
+                        and result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
+                    result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
+                    result.encoder._precision_bits = cfg.encoder.precision_bits
+                if (cfg.encoder.trunc_method.prod == "fission"
+                        and y.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
+                    y = y.egk_trunc_pr(62, cfg.encoder.precision_bits)
+                    y.encoder._precision_bits = cfg.encoder.precision_bits
                 protocol = globals()[cfg.mpc.protocol]
                 result.share.set_(
                     getattr(protocol, op)(result, y, *args, **kwargs).share.data
@@ -392,8 +413,13 @@ class ArithmeticSharedTensor:
                 if self.encoder.scale > 1:
                     if cfg.encoder.trunc_method.prod == "crypten":
                         return result.div_(result.encoder.scale)
-                    else:
+                    elif cfg.encoder.trunc_method.prod == "egk":
                         return result.egk_trunc_pr(62, result.encoder._precision_bits)
+                    elif cfg.encoder.trunc_method.prod == "fission":
+                        result.encoder._precision_bits *= 2
+                        return result
+                    else:
+                        raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
                 else:
                     result.encoder = self.encoder
             else:  # scale by larger of self.encoder.scale and y.encoder.scale
@@ -403,6 +429,7 @@ class ArithmeticSharedTensor:
                     elif cfg.encoder.trunc_method.prod == "egk":
                         return result.egk_trunc_pr(62, result.encoder._precision_bits)
                     elif cfg.encoder.trunc_method.prod == "fission":
+                        result.encoder._precision_bits += y.encoder._precision_bits
                         return result
                     else:
                         raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")

@@ -12,6 +12,7 @@ import torch
 
 from curl.common.rng import generate_random_ring_element
 from curl.common.util import torch_cat
+from curl.config import cfg
 
 '''
 Fission Architecture
@@ -92,6 +93,7 @@ class EvaluatorClient:
                 req.wait()
 
             tensor.share = torch_cat(results, dim=dim)
+            tensor.encoder._precision_bits = cfg.encoder.precision_bits
             return tensor
         
     @staticmethod
@@ -121,6 +123,7 @@ class EvaluatorServer:
     def __init__(self):
         """Initializes an Evaluator server that receives requests"""
         self.generator = torch.Generator()
+        self.cfg_file = curl.cfg.get_default_config_path()
 
         # Initialize connection
         logging.info("EvaluatorServer: Initializing...")
@@ -192,7 +195,7 @@ class EvaluatorServer:
                 result = fission_operations[function](tensor)
 
                 # Secret share the result back to the MPC nodes.
-                result = (result * 2**precision).long()
+                result = (result * 2**cfg.encoder.precision_bits).long()
                 requests = [None] * world_size
                 for mpc_node in range(1, world_size):
                     share = generate_random_ring_element(result.size(), generator=self.generator)

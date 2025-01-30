@@ -65,6 +65,7 @@ def run_qnli_accuracy_test(model, curl_model, data, targets, total):
         x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
         outputs_enc = curl_model(**x_enc)
         result_enc = outputs_enc.get_plain_text()
+        print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
     return count / total, count_enc / total
 
@@ -101,6 +102,13 @@ def get_args():
         type=int,
         default=2,
         help="The number of parties to launch. Each party acts as its own process",
+    )
+    parser.add_argument(
+        "--evaluator_size",
+        "-es",
+        type=int,
+        default=0,
+        help="The number of eval parties to launch. Each party acts as its own process",
     )
     parser.add_argument(
         "--multiprocess",
@@ -166,6 +174,9 @@ def get_config(args):
     elif args.no_cmp:
         logging.info("Using config with LUTs without comparisons:")
         cfg_file = cfg_file.replace("default", "llm_config")
+    elif args.evaluator_size:
+        logging.info("Using Fission config")
+        cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")
     return cfg_file
@@ -191,7 +202,7 @@ def main():
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, _run_experiment, args, cfg_file)
+        launcher = MultiProcessLauncher(args.world_size, args.evaluator_size, _run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()

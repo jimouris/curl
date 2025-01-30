@@ -6,10 +6,8 @@ python examples/shuffle_test.py --multiprocess
 
 import argparse
 import logging
-import os
 
 import curl
-from curl.evaluator.evaluator import EvaluatorClient
 from multiprocess_launcher import MultiProcessLauncher
 
 def get_args():
@@ -53,6 +51,9 @@ def get_args():
 
 def get_config(args):
     cfg_file = curl.cfg.get_default_config_path()
+    if args.evaluator_size:
+        logging.info("Using Fission config")
+        cfg_file = cfg_file.replace("default", "fission")
     return cfg_file
 
 def run_shuffle(cfg_file, device=None):
@@ -67,11 +68,22 @@ def run_shuffle(cfg_file, device=None):
     ]
     for x_enc in tests:
         curl.print("x_enc :", x_enc.get_plain_text())
-        y_enc = x_enc.gelu()
+        w_enc = x_enc.gelu()
+        curl.print("w_enc :", w_enc)
+        curl.print("w_enc :", w_enc.encoder.precision_bits)
+        curl.print("w :", w_enc.get_plain_text())
+        curl.print(w_enc.share.shape, x_enc.shape)
+        assert w_enc.share.shape == x_enc.shape
+        y_enc = x_enc * x_enc
         curl.print("y_enc :", y_enc)
+        curl.print("y_enc :", y_enc.encoder.precision_bits)
         curl.print("y :", y_enc.get_plain_text())
         curl.print(y_enc.share.shape, x_enc.shape)
         assert y_enc.share.shape == x_enc.shape
+        z_enc = x_enc * y_enc
+        curl.print("z_enc :", z_enc)
+        curl.print("z_enc :", z_enc.encoder.precision_bits)
+        curl.print("z :", z_enc.get_plain_text())
         curl.print("----")
 
 def _run_experiment(args):
