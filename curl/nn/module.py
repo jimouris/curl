@@ -2908,7 +2908,7 @@ class LayerNormalization(Module):
     input into `forward()`.
     """
 
-    def __init__(self, eps=1e-12):
+    def __init__(self, eps=1e-05):
         super().__init__()
         self.eps = eps
         self.inv_var = None
@@ -2939,7 +2939,7 @@ class LayerNormalization(Module):
         )
 
 class LayerNorm(Module):
-    def __init__(self, shape, eps=1e-12):
+    def __init__(self, shape, eps=1e-05):
         super().__init__()
 
         # initialize model parameters and buffers:
@@ -2972,7 +2972,7 @@ class BatchNormalization(Module):
     `running_var` tensors as input into `forward()`.
     """
 
-    def __init__(self, eps=1e-12, momentum=0.1):
+    def __init__(self, eps=1e-05, momentum=0.1):
         super().__init__()
         self.eps = eps
         self.momentum = momentum
@@ -3021,7 +3021,7 @@ class BatchNormalization(Module):
         if attributes is None:
             attributes = {}
         return BatchNormalization(
-            eps=attributes.get("epsilon", 1e-12),
+            eps=attributes.get("epsilon", 1e-05),
             momentum=1.0 - attributes.get("momentum", 0.9),
         )  # NOTE: Role of momentum is reversed in ONNX specification.
 
@@ -3035,7 +3035,7 @@ class _BatchNorm(Module):
     Unlike the `BatchNormalization` class, this module is stateful.
     """
 
-    def __init__(self, num_features, eps=1e-12, momentum=0.1):
+    def __init__(self, num_features, eps=1e-05, momentum=0.1):
         super().__init__()
 
         # initialize model parameters and buffers:

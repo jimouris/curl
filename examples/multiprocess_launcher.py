@@ -80,7 +80,9 @@ class MultiProcessLauncher:
             # self.processes.append(self.ttp_process)
 
         for rank in range(evaluator_size):
-            evaluator_rank = rank + world_size + 1
+            evaluator_rank = world_size + rank
+            if self.ttp_process:
+                evaluator_rank += 1
             if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
                 device = torch.device(f"cuda:{evaluator_rank}")
                 new_args = copy.deepcopy(fn_args)
@@ -134,11 +136,6 @@ class MultiProcessLauncher:
             assert (
                 process.exitcode == 0
             ), f"{process.name} has non-zero exit code {process.exitcode}"
-        # for process in self.eval_processes:
-        #     process.join()
-        #     assert (
-        #         process.exitcode == 0
-        #     ), f"{process.name} has non-zero exit code {process.exitcode}"
 
     def terminate(self):
         for process in self.processes:

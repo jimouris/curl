@@ -44,23 +44,18 @@ class EvaluatorClient:
             self.eval_comm_group = communicator.eval_comm_group
             logging.info(f"EvaluatorClient {communicator.get_rank()} initialized")
 
-        def evaluator_request(self, func_name, tensor, dim=None, *args, **kwargs):
+        def evaluator_request(self, func_name, tensor, *args, **kwargs):
             communicator = comm.get()
             world_size = communicator.get_world_size()
             evaluators_size = communicator.get_evaluators_size()  # Number of processes
             assert (
                 communicator.get_rank() < world_size
             ), "Only MPC parties communicate with the EvaluatorServers"
-            if dim is None:
-                dim = tensor.share.ndim - 1 # Dimension to split along
-                # Split the tensor along the specified dimension
-                split_size = tensor.size(dim) // evaluators_size
-                # This is for corner cases where the last dimension is 1: e.g., [[1], [2], ...]
-                while split_size == 0 or dim > 0:
-                    dim -= 1
-                    split_size = tensor.size(dim) // evaluators_size
+            if communicator.ttp_initialized:
+                world_size += 1
+
             # Scatter: Divide data into chunks for workers
-            chunks = tensor.chunk(evaluators_size, dim=dim)
+            chunks = tensor.chunk(evaluators_size)
 
             if communicator.get_rank() == 0:
                 message = {
@@ -68,15 +63,15 @@ class EvaluatorClient:
                     "precision": tensor.encoder.precision_bits,
                 }
                 for i in range(evaluators_size):
-                    evaluator_rank = world_size + 1 + i
-                    message["tensor_size"]= chunks[i].size()
+                    evaluator_rank = world_size + i
+                    message["tensor_size"] = chunks[i].size()
                     communicator.send_obj(message, evaluator_rank, self.eval_comm_group)
                     logging.debug(f"Sent to Evaluator [{evaluator_rank}]")
 
             # Process each split asynchronously
             requests = [None] * evaluators_size
             for i in range(evaluators_size):
-                evaluator_rank = world_size + 1 + i
+                evaluator_rank = world_size + i
                 requests[i] = communicator.isend(chunks[i].share.contiguous(), evaluator_rank, self.eval_group)
             # Wait for all async requests to complete and retrieve messages
             for req in requests:
@@ -86,13 +81,13 @@ class EvaluatorClient:
             results = [torch.empty_like(chunks[i]._tensor.share) for i in range(evaluators_size)]
             requests = [None] * evaluators_size
             for i in range(evaluators_size):
-                evaluator_rank = world_size + 1 + i
+                evaluator_rank = world_size + i
                 requests[i] = communicator.irecv(results[i], evaluator_rank, self.eval_group)
             # Wait for all async requests to complete and retrieve messages
             for req in requests:
                 req.wait()
 
-            tensor.share = torch_cat(results, dim=dim)
+            tensor.share = torch_cat(results)
             tensor.encoder._precision_bits = cfg.encoder.precision_bits
             return tensor
         

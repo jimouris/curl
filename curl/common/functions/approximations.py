@@ -348,21 +348,26 @@ class LookupTables:
                 cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
         print(f'[Device] LUTs initialized for {device}\n')
 
-def permute_reveal_evaluate_share(self, func, dim=None):
+def permute_reveal_evaluate_share(self, func):
     """
     Applies the permute and split reveal technique.
 
     Args:
         self: The input tensor to be processed.
         func: A function name that takes a tensor as input and returns the transformed tensor.
-        dim: The dimension along which to split-reveal.
 
     Returns:
         The processed tensor with the function applied to each split.
     """
-    shuffled, inv_perm = self.shuffle()  # Shuffle the tensor
-    shuffled = EvaluatorClient.get().evaluator_request(func, shuffled, dim)
-    return shuffled.unshuffle(inv_perm)
+    size = self.size()
+    if func in ("softmax", "log_softmax"):
+        result = self.flatten(0, -2)
+    else:
+        result = self.flatten()
+    result, inv_perm = result.shuffle()
+    result = EvaluatorClient.get().evaluator_request(func, result)
+    result = result.unshuffle(inv_perm)
+    return result.reshape(size)
 
 def _nexp_lut(self, method):
     r"""Approximates the negative exponential function using a limit approximation"""
@@ -625,8 +630,6 @@ def inv_sqrt(self):
     .. _Newton-Raphson:
         https://en.wikipedia.org/wiki/Fast_inverse_square_root#Newton's_method
     """
-    initial = cfg.functions.sqrt.nr_initial
-    iters = cfg.functions.sqrt.nr_iters
     method = cfg.functions.inv_sqrt.method
 
     if method in ("haar", "bior", "tailored_haar"):
@@ -659,6 +662,8 @@ def inv_sqrt(self):
             b = self < 1
             return b * y_0 + (1-b) * y_1
     elif method == "NR":
+        initial = cfg.functions.sqrt.nr_initial
+        iters = cfg.functions.sqrt.nr_iters
         # Initialize using decent approximation
         if initial is None:
             y = exp(self.div(2).add(0.2).neg()).mul(2.2).add(0.2)
@@ -1207,6 +1212,8 @@ def softmax(self, dim, **kwargs):
             inv_denominator = numerator.sum(dim, keepdim=True).reciprocal()
         return numerator * inv_denominator
     elif method == "fission":
+        if dim != -1:
+            raise ValueError(f"Dimension {dim} not supported for fission softmax")
         return permute_reveal_evaluate_share(self, "softmax")
     else:
         raise ValueError(f"Unrecognized method {method} for softmax")
@@ -1233,4 +1240,6 @@ def log_softmax(self, dim, **kwargs):
         result = logits - normalize_term.log()
         return result
     elif method == "fission":
+        if dim != -1:
+            raise ValueError(f"Dimension {dim} not supported for fission log_softmax")
         return permute_reveal_evaluate_share(self, "log_softmax")

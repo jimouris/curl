@@ -54,7 +54,7 @@ def get_bert_model(path, encyrpted_model):
 def run_qnli_accuracy_test(model, curl_model, data, targets, total):
     count = 0
     count_enc = 0
-    for label in range(total):
+    for i, label in enumerate(range(total)):
         # Plaintext
         outputs = model(**data[label])
         result = outputs.logits
@@ -67,6 +67,7 @@ def run_qnli_accuracy_test(model, curl_model, data, targets, total):
         result_enc = outputs_enc.get_plain_text()
         print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
+        print(f"{i=}, {count/i=}, {count_enc/i=}")
     return count / total, count_enc / total
 
 
@@ -80,7 +81,6 @@ def run_qnli(cfg_file, model, count=100, communication=False, device=None):
         curl_bert_model, bert_tokenizer, bert_model = get_bert_model("gchhablani/bert-base-cased-finetuned-qnli", BertBaseForSequenceClassification)
     elif model == "BertTiny":
         curl_bert_model, bert_tokenizer, bert_model = get_bert_model("M-FAC/bert-tiny-finetuned-qnli", BertTinyForSequenceClassification)
-
     data, targets = load_tsv("examples/llms/glue_data/QNLI/dev.tsv", bert_tokenizer)
 
     if count < 1:
