@@ -72,7 +72,7 @@ class TupleProvider:
         filepath = self._get_request_path(prefix=filepath)
         if os.path.exists(filepath):
             self.request_cache = torch.load(filepath)
-            os.remove(filepath)
+            # os.remove(filepath)
         else:
             curl.log(f"Cache requests not loaded - File `{filepath}` not found")
 
@@ -89,7 +89,7 @@ class TupleProvider:
         filepath = self._get_tuple_path(prefix=filepath)
         if os.path.exists(filepath):
             self.tuple_cache = torch.load(filepath)
-            os.remove(filepath)
+            # os.remove(filepath)
         else:
             curl.log(f"Tuple cache not loaded - File `{filepath}` not found")
 

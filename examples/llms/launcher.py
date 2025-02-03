@@ -70,7 +70,7 @@ def get_args():
         help="Print communication statistics",
     )
     parser.add_argument(
-        "--with-cache",
+        "--fill-cache",
         default=False,
         action="store_true",
         help="Populate the cache and run with it",
@@ -132,7 +132,7 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_llm(cfg_file, args.tensor_size, args.model, args.with_cache, args.communication, not args.not_full, args.device)
+    run_llm(cfg_file, args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device)
 
     print('Done')
 

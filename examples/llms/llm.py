@@ -126,7 +126,7 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, model, with_cache=False, communication=False, full=True, device=None):
+def run_llm(cfg_file, tensor_size, model, fill_cache=False, communication=False, full=True, device=None):
     logging.info("Tensor size '{}'".format(tensor_size))
 
     # First cold run.
@@ -139,30 +139,24 @@ def run_llm(cfg_file, tensor_size, model, with_cache=False, communication=False,
         key: dict(value)['method'] for key, value in functions_data.items() if 'method' in dict(value)
     }
     logging.info("\t'{}'".format(filtered_data))
-    if with_cache:
-        curl.trace()
 
-    logging.info(f"="*22 + " Without Cache " + "="*22)
+    if fill_cache:
+        logging.info(f"=" * 22 + " Tracing requests for the cache " + "=" * 22)
+        curl.trace_once()
+
+    provider = curl.mpc.get_default_provider()
+    provider.load_cache()
 
     benches = LLMs(model, tensor_size, device=device, full=full)
     benches.run()
     logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
+    if fill_cache:
+        logging.info(f"=" * 22 + " Filling the cache " + "=" * 22)
+        curl.fill_cache()
+        provider.save_cache()
+
     if communication:
         comm.get().print_communication_stats()
         exit(0)
-
-    if with_cache:
-        # Populate the cache.
-        curl.fill_cache()
-        provider = curl.mpc.get_default_provider()
-        provider.save_cache()
-        provider.load_cache()
-        curl.trace(False)
-
-        # Run with the cache.
-        logging.info(f"="*24 + " With Cache " + "="*24)
-        benches = LLMs(model, tensor_size, device=device, full=full)
-        benches.run()
-        logging.info("'\n{}\n'".format(benches))

@@ -1,3 +1,7 @@
+**/tuple_cache/tuple_cache-*
+**/tuple_cache/request_cache-*
+*.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
