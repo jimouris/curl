@@ -140,12 +140,12 @@ def run_llm(cfg_file, tensor_size, model, fill_cache=False, communication=False,
     }
     logging.info("\t'{}'".format(filtered_data))
 
+    provider = curl.mpc.get_default_provider()
     if fill_cache:
         logging.info(f"=" * 22 + " Tracing requests for the cache " + "=" * 22)
-        curl.trace_once()
-
-    provider = curl.mpc.get_default_provider()
-    provider.load_cache()
+        provider.trace_once()
+    else:
+        provider.load_cache()
 
     benches = LLMs(model, tensor_size, device=device, full=full)
     benches.run()
@@ -154,8 +154,7 @@ def run_llm(cfg_file, tensor_size, model, fill_cache=False, communication=False,
 
     if fill_cache:
         logging.info(f"=" * 22 + " Filling the cache " + "=" * 22)
-        curl.fill_cache()
-        provider.save_cache()
+        provider.fill_cache()
 
     if communication:
         comm.get().print_communication_stats()

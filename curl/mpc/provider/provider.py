@@ -11,6 +11,7 @@ import os
 import curl
 import curl.communicator as comm
 import torch
+import warnings
 
 class TupleProvider:
     TRACEABLE_FUNCTIONS = [
@@ -24,6 +25,7 @@ class TupleProvider:
     ]
 
     _DEFAULT_CACHE_PATH = os.path.normpath(os.path.join(__file__, "../tuple_cache/"))
+    CACHE_SAVE_BATCH_SIZE = 1000  # Save cache every CACHE_SAVE_BATCH_SIZE requests
 
     def __init__(self):
         self.tracing = False
@@ -60,7 +62,6 @@ class TupleProvider:
         self.trace(tracing=untraced)
 
     def _save_requests(self, filepath=None):
-        # TODO: Deal with any overwrite issues
         if len(self.request_cache) == 0:
             curl.log("Request cache not saved - cache is empty")
             return
@@ -71,29 +72,57 @@ class TupleProvider:
     def _load_requests(self, filepath=None):
         filepath = self._get_request_path(prefix=filepath)
         if os.path.exists(filepath):
-            self.request_cache = torch.load(filepath)
-            # os.remove(filepath)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                self.request_cache = torch.load(filepath)
         else:
             curl.log(f"Cache requests not loaded - File `{filepath}` not found")
 
     def _save_tuples(self, filepath=None):
-        # TODO: Deal with any overwrite issues
+        """Saves each batch of tuple cache to a separate file."""
         if len(self.tuple_cache) == 0:
             curl.log("Tuple cache not saved - cache is empty")
             return
         filepath = self._get_tuple_path(prefix=filepath)
-        torch.save(self.tuple_cache, filepath)
-        self.tuple_cache = {}
+        # Ensure directory exists
+        os.makedirs(filepath, exist_ok=True)
+
+        existing_files = [f for f in os.listdir(filepath) if f.startswith("tuple_batch_")]
+        next_index = len(existing_files)  # New file index
+        batch_file = os.path.join(filepath, f"tuple_batch_{next_index}.pt")
+
+        # Save batch as a new file
+        torch.save(self.tuple_cache, batch_file)
+        curl.log(f"Tuple cache batch saved to {batch_file}")
+        self.tuple_cache.clear()  # Clear memory after saving
+
 
     def _load_tuples(self, filepath=None):
+        """Loads all batch files and reconstructs the tuple cache."""
         filepath = self._get_tuple_path(prefix=filepath)
-        if os.path.exists(filepath):
-            self.tuple_cache = torch.load(filepath)
-            # os.remove(filepath)
-        else:
-            curl.log(f"Tuple cache not loaded - File `{filepath}` not found")
+        if not os.path.exists(filepath):
+            curl.log(f"Tuple cache directory `{filepath}` not found")
+            return
 
-    def save_cache(self, filepath=None):
+        batch_files = sorted([f for f in os.listdir(filepath) if f.startswith("tuple_batch_")])
+        self.tuple_cache = {}
+        for batch_file in batch_files:
+            batch_path = os.path.join(filepath, batch_file)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=FutureWarning)
+                    batch_data = torch.load(batch_path)
+                for key, values in batch_data.items():
+                    if key in self.tuple_cache:
+                        self.tuple_cache[key].extend(values)
+                    else:
+                        self.tuple_cache[key] = values
+            except Exception as e:
+                curl.log(f"Error loading {batch_path}: {e}")
+
+        curl.log(f"Loaded {len(batch_files)} tuple cache batches.")
+
+    def _save_cache(self, filepath=None):
         """Saves request and tuple cache to a file.
 
         args:
@@ -142,9 +171,36 @@ class TupleProvider:
 
         return func_from_cache
 
+    def remove_cache(self):
+        # Remove previous request cache if it exists
+        filepath = self._get_request_path()
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            curl.log(f"Removed previous request cache: {filepath}")
+        else:
+            curl.log(f"Request cache not removed - File `{filepath}` not found")
+
+        # Remove tuple cache files iteratively
+        filepath = self._get_tuple_path()
+        if os.path.exists(filepath):
+            batch_files = sorted([f for f in os.listdir(filepath) if f.startswith("tuple_batch_")])
+            for batch_file in batch_files:
+                batch_path = os.path.join(filepath, batch_file)
+                try:
+                    os.remove(batch_path)
+                    curl.log(f"Removed tuple cache file: {batch_path}")
+                except Exception as e:
+                    curl.log(f"Error removing {batch_path}: {e}")
+        else:
+            curl.log(f"Tuple cache not removed - File `{filepath}` not found")
+
+        curl.log(f"Completed tuple cache cleanup.")
+
+    # TODO: parallelize / async this
     def fill_cache(self):
-        """Fills tuple_cache with tuples requested in the request_cache"""
-        # TODO: parallelize / async this
+        """Fills tuple_cache with tuples requested in the request_cache and saves in batches."""
+        self.remove_cache()
+        batch_count = 0
         for request in self.request_cache:
             func_name, args, kwargs = request
             result = object.__getattribute__(self, func_name)(*args, **kwargs)
@@ -155,6 +211,18 @@ class TupleProvider:
                 self.tuple_cache[hashable_request].append(result)
             else:
                 self.tuple_cache[hashable_request] = [result]
+            # Save in batches to avoid excessive memory use
+            batch_count += 1
+            if batch_count >= self.CACHE_SAVE_BATCH_SIZE:
+                self._save_tuples()
+                batch_count = 0  # Reset counter
+
+        # Final save if anything remains in cache
+        if len(self.tuple_cache) > 0:
+            self._save_tuples()
+        # Finally, save the requests.
+        self._save_requests()
+
 
     def generate_additive_triple(self, size0, size1, op, device=None, *args, **kwargs):
         """Generate multiplicative triples of given sizes"""
