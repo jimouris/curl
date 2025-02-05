@@ -107,10 +107,13 @@ def run_gpt2_lambada(cfg_file, fill_cache=False, communication=False, device=Non
     print('Tokenizing')
     my_input = "What is your name?"
     tokenized_input = tokenizer(my_input, return_tensors='pt')
-    private_output = private_model(*tokenized_input)
+    print(f"{tokenized_input=}")
+    tokenized_input_ids_enc = curl.cryptensor(tokenized_input['input_ids'])
+    tokenized_attention_mask_enc = curl.cryptensor(tokenized_input['attention_mask'])
+    print('running private model')
+    private_output = private_model(tokenized_input_ids_enc, tokenized_attention_mask_enc)
     print(f'{private_output=}')
 
-    logging.info("'\n{}\n'".format(benches))
     logging.info("="*60)
 
     if fill_cache:

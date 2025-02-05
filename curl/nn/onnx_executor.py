@@ -495,6 +495,9 @@ class ONNXExecutor:
             #     self.tensor_store[node.output[2]] = variance
         elif op_type == "Erf":
             result = scipy.special.erf(inputs[0])
+        elif op_type == "Range":
+            start, end, step = (x.item() if isinstance(x, np.ndarray) else x for x in inputs)
+            result = torch.arange(start, end, step)
         else:
             raise NotImplementedError(f"Operation {op_type} is not implemented")
 
