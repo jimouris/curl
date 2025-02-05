@@ -13,6 +13,7 @@ import onnx
 import torch
 import torch.onnx.symbolic_helper as sym_help
 import torch.onnx.utils
+from curl.nn.onnx_executor import ONNXExecutor
 from onnx import numpy_helper
 from torch.onnx import OperatorExportTypes
 
@@ -36,15 +37,15 @@ except ImportError:
     SYM_REGISTRY = False
 
 
-_OPSET_VERSION = 11
+_OPSET_VERSION = 20
 
 
-def from_onnx(onnx_string_or_file):
+def from_onnx(onnx_string_or_file, track_execution=False):
     """
     Converts an ONNX model serialized in an `onnx_string_or_file` to a CrypTen model.
     """
     onnx_model = _load_onnx_model(onnx_string_or_file)
-    return _to_crypten(onnx_model)
+    return _to_crypten(onnx_model, track_execution)
 
 
 def from_pytorch(pytorch_model, dummy_input):
@@ -161,15 +162,19 @@ ONNX_TO_CRYPTEN = {
 }
 
 
-def _to_crypten(onnx_model):
+def _to_crypten(onnx_model, track_execution=False):
     """
     Function that converts an `onnx_model` to a CrypTen model.
     """
 
     # create graph:
     input_names, output_names = _get_input_output_names(onnx_model)
-    assert len(output_names) == 1, "Only one output per model supported."
-    crypten_model = module.Graph(input_names, output_names[0])
+    # create ONNX executor if track_execution is True
+    onnx_executor = ONNXExecutor(onnx_model) if track_execution else None
+    # assert len(output_names) == 1, "Only one output per model supported."
+    crypten_model = module.Graph(
+        input_names, output_names[0], onnx_executor=onnx_executor
+    )
 
     # create nodes for the parameters:
     for node in onnx_model.graph.initializer:
@@ -184,6 +189,18 @@ def _to_crypten(onnx_model):
         crypten_class = _get_operator_class(node.op_type, attributes)
 
         # add CrypTen module to graph:
+        print(f"[{node.op_type}]\n"
+              f"\tI:({list(node.input)}) O:{list(node.output)}\n"
+              f"\tAttr: {attributes}\n"
+              f"\tClass{crypten_class}")
+
+        if node.op_type == "ReduceSum":
+            for attr in node.attribute:
+                print("ATTR:", attr)
+            for input in node.input:
+                print("INPUT:", input)
+            for output in node.output:
+                print("OUTPUT:", output)
         crypten_module = crypten_class.from_onnx(attributes=attributes)
         input_names = list(node.input)
         output_names = list(node.output)
@@ -215,7 +232,7 @@ def _get_input_output_names(onnx_model):
     input_names = [input.name for input in onnx_model.graph.input]
     output_names = [output.name for output in onnx_model.graph.output]
     assert len(input_names) >= 1, "number of inputs should be at least 1"
-    assert len(output_names) == 1, "number of outputs should be 1"
+    # assert len(output_names) == 1, output_names
     return input_names, output_names
 
 
@@ -342,7 +359,7 @@ def _onnx_crypten_dropout(g, input, p, train):
     CrypTen models, and so the Dropout module needs to be included in the
     CrypTen-specific conversion.
     """
-    r, _ = g.op("Dropout", input, ratio_f=p, outputs=2)
+    r, _ = g.op("Dropout", input, outputs=2)
     return r
 
 
@@ -357,5 +374,5 @@ def _onnx_crypten_feature_dropout(g, input, p, train):
     CrypTen models, and so the DropoutNd module needs to be included in the
     CrypTen-specific conversion.
     """
-    r, _ = g.op("DropoutNd", input, ratio_f=p, outputs=2)
+    r, _ = g.op("DropoutNd", input, outputs=2)
     return r

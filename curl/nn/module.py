@@ -6,14 +6,28 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import math
 import warnings
+import weakref
 from collections import OrderedDict
 
 import curl
-import math
+import numpy as np
 import torch
 import torch.onnx.symbolic_helper as sym_help
 from curl.common.functions.pooling import _adaptive_pool2d_helper
+from curl.config import cfg
+
+UPPER_BOUND = 1 << 16
+LOWER_BOUND = -UPPER_BOUND
+
+
+def clamp_int64(x):
+    if isinstance(x, torch.Tensor):
+        max_value = UPPER_BOUND
+        min_value = LOWER_BOUND
+        return torch.clamp(x, min_value, max_value)
+    return x
 
 
 class Module:
@@ -30,6 +44,7 @@ class Module:
         self._buffers = OrderedDict()
         self._modules = OrderedDict()
         self.encrypted = False
+        self._forward_hooks = OrderedDict()
         self.train()
 
     def __repr__(self):
@@ -43,12 +58,41 @@ class Module:
         """
         raise NotImplementedError("Call this function on a Module type.")
 
+
     def forward(self, *args, **kwargs):
         """Perform forward pass on model."""
         raise NotImplementedError("forward not implemented")
 
     def __call__(self, *args, **kwargs):
-        return self.forward(*args, **kwargs)
+        result = self.forward(*args, **kwargs)
+        for hook in self._forward_hooks.values():
+            if isinstance(result, torch.Tensor):
+                hook_result = hook(self, args, result)
+            elif isinstance(result, curl.CrypTensor):
+                hook_result = hook(self, args, result.get_plain_text())
+            if hook_result is not None:
+                result = hook_result
+        return result
+
+    def register_forward_hook(self, hook):
+        """
+        Register a forward hook.
+
+        The hook will be called every time after :func:`forward` has computed an output.
+        It should have the following signature::
+
+            hook(module, input, output) -> None or modified output
+
+        The hook should not modify the input unless it knows what it is doing.
+
+        Returns:
+            :class:`torch.utils.hooks.RemovableHandle`:
+                a handle that can be used to remove the added hook by calling
+                ``handle.remove()``
+        """
+        handle = RemovableHandle(self._forward_hooks)
+        self._forward_hooks[handle.id] = hook
+        return handle
 
     def train(self, mode=True):
         """Sets the module in the specified training mode."""
@@ -596,6 +640,28 @@ class Module:
         self.register_module(name, module)
 
 
+class RemovableHandle:
+    """A handle which provides the capability to remove a hook."""
+
+    def __init__(self, hooks_dict):
+        self.hooks_dict_ref = weakref.ref(hooks_dict)
+        self.id = hooks_dict._next_id = (
+            hooks_dict._next_id + 1 if hasattr(hooks_dict, "_next_id") else 0
+        )
+
+    def remove(self):
+        hooks_dict = self.hooks_dict_ref()
+        if hooks_dict is not None and self.id in hooks_dict:
+            del hooks_dict[self.id]
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self.hooks_dict_ref = weakref.ref(OrderedDict())
+        self.id = 0
+
+
 class Container(Module):
     """
     Container allows distinguishing between individual modules and containers.
@@ -615,7 +681,9 @@ class Graph(Container):
     the module by the `add_module` function.
     """
 
-    def __init__(self, input_names, output_names, modules=None, graph=None):
+    def __init__(
+        self, input_names, output_names, modules=None, graph=None, onnx_executor=None
+    ):
         """
         Initializes a graph module with inputs named by `input_names`, that
         produces outputs named by `output_names`.
@@ -636,6 +704,8 @@ class Graph(Container):
         if graph is not None:
             self._graph = graph
 
+        self.onnx_executor = onnx_executor
+
     def add_module(self, name, module, input_names=None, output_names=None):
         """
         Adds a `module` with the specified `name` to the graph. If the `module`
@@ -654,13 +724,40 @@ class Graph(Container):
         if output_names is not None:
             module._output_names = output_names
 
+    #
     def forward(self, *args):
+
+
+        def check(x, y):
+            np.testing.assert_allclose(x.numpy(), y, rtol=0.01, atol=0.01)
+            try:
+                np.testing.assert_allclose(x.numpy(), y, rtol=0.1, atol=0.1)
+            except Exception as e:
+                logging.error(f"{e}")
+
+            # if fc < 100:
+            #     np.testing.assert_allclose(x.numpy(), y, rtol=0.1, atol=0.1)
+            # elif fc < 159:
+            #     np.testing.assert_allclose(x.numpy(), y, rtol=0.5, atol=0.5)
+            # elif fc < 200:
+            #     np.testing.assert_allclose(x.numpy(), y, rtol=25, atol=25)
+            # elif fc < 200:
+            #     np.testing.assert_allclose(x.numpy(), y, rtol=0.5, atol=0.5)
+            # else:
+            #     np.testing.assert_allclose(x.numpy(), y, rtol=7.5, atol=7.5)
+
         assert len(args) == len(
             self.input_names
         ), f"Expected {len(self.input_names)} inputs but received {len(args)}."
 
         # keep track of all values that have been computed:
         values = {self.input_names[idx]: args[idx] for idx in range(len(args))}
+        if self.onnx_executor is not None:
+            pt_values = {
+                self.input_names[idx]: args[idx].get_plain_text()
+                for idx in range(len(args))
+            }
+            self.onnx_executor.load_inputs(pt_values)
         computed = {key: False for key in self._graph.keys()}
         inputs_available = {
             key: [False for _ in range(len(value_list))]
@@ -705,14 +802,63 @@ class Graph(Container):
         for input_name in self.input_names:
             _mark_as_computed(input_name)
         node_to_compute = _find_computable_node()
+
         while node_to_compute is not None:
 
             # compute output of module:
             input = [values[name] for name in self._graph[node_to_compute]]
-            if len(input) == 1:
-                input = input[0]  # unpack iterable if possible
+
             module = self._modules[node_to_compute]
-            output = module(input)
+
+            # logging.debug(f"[***][{FH.fc + 1}] [Computing {node_to_compute}[{module}]")
+
+            # Checking inputs after computation
+            if self.onnx_executor is not None and not isinstance(module, Parameter):
+                onnx_inputs = self.onnx_executor.get_node_inputs_by_name(
+                    node_to_compute
+                )
+                for name, ii, jj in zip(
+                    self._graph[node_to_compute], input, onnx_inputs
+                ):
+                    logging.debug(
+                        f"[INPUT CHECK] [{name}] Ciphertext: [{type(ii)} {ii.shape}] Cleartext: [{type(jj)} {jj.shape}]"
+                        f"[{ii.encoder._precision_bits if isinstance(ii, curl.mpc.mpc.MPCTensor) else ''}]"
+                    )
+                    if isinstance(ii, curl.mpc.mpc.MPCTensor):
+                        ii = ii.get_plain_text()
+                    check(ii, jj)
+
+            output = module(
+                input[0] if len(input) == 1 else input
+            )  # CIPHERTEXT EXECUTION
+
+            if self.onnx_executor is not None and not isinstance(module, Parameter):
+                # Checking inputs after computation
+                onnx_inputs = self.onnx_executor.get_node_inputs_by_name(
+                    node_to_compute
+                )
+                for name, ii, jj in zip(
+                    self._graph[node_to_compute], input, onnx_inputs
+                ):
+                    logging.debug(
+                        f"[INPUT Bi-CHECK] [{name}] Ciphertext: [{type(ii)} {ii.shape}] Cleartext: [{type(jj)} {jj.shape}]"
+                        f"[{ii.encoder._precision_bits if isinstance(ii, curl.mpc.mpc.MPCTensor) else ''}]"
+                    )
+                    if isinstance(ii, curl.mpc.mpc.MPCTensor):
+                        ii = ii.get_plain_text()
+                    check(ii, jj)
+
+                # Checking outputs after computation
+                cleartext_output = self.onnx_executor.execute_node_by_name(
+                    node_to_compute
+                )
+                ct_out = output  # Copy output to ct_out
+                if isinstance(output, curl.mpc.mpc.MPCTensor):
+                    ct_out = ct_out.get_plain_text()
+                logging.debug(
+                    f"[COMP] {type(output)} -> {type(ct_out)}({output.shape}) vs {type(cleartext_output)}({cleartext_output.shape})"
+                )
+                check(ct_out, cleartext_output)
 
             # we may get one output:
             output_names = getattr(module, "_output_names", None)
@@ -953,6 +1099,7 @@ class Parameter(Module):
         # register whether or not module is encrypted:
         self.encrypted = curl.is_encrypted_tensor(param)
 
+    #
     def forward(self, input):
         return self.data
 
@@ -964,6 +1111,7 @@ class Parameter(Module):
 class Identity(Module):
     def __init__(self):
         super().__init__()
+
 
     def forward(self, input):
         return input
@@ -991,6 +1139,8 @@ class Constant(Module):
             value
         ), f"value must be PyTorch tensor, not {type(value)}"
         self.value = value.to(dtype=torch.float)
+        self.value = clamp_int64(self.value)
+
 
     def forward(self, input):
         return self.value
@@ -1022,6 +1172,8 @@ class ConstantOfShape(Module):
             value
         ), f"value must be PyTorch tensor, not {type(value)}"
         self.value = value.to(dtype=torch.float)
+        self.value = clamp_int64(self.value)
+
 
     def forward(self, size):
         if torch.is_tensor(size):
@@ -1048,6 +1200,7 @@ class Add(Module):
     Module that sums two values.
     """
 
+
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input must be list or tuple"
         assert len(input) == 2, "input must contain two tensors"
@@ -1062,6 +1215,7 @@ class Sub(Module):
     """
     Module that subtracts two values.
     """
+
 
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input must be list or tuple"
@@ -1078,6 +1232,7 @@ class Mul(Module):
     Module that multiplies two values.
     """
 
+
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input must be list or tuple"
         assert len(input) == 2, "input must contain two tensors"
@@ -1093,6 +1248,7 @@ class Div(Module):
     Module that divides two values.
     """
 
+
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input must be list or tuple"
         assert len(input) == 2, "input must contain two tensors"
@@ -1103,10 +1259,57 @@ class Div(Module):
         return Div()
 
 
+class Not(Module):
+    """
+    Returns the negation of the input tensor element-wise.
+    """
+
+
+    def forward(self, input):
+        return input.logical_not()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Not()
+
+
+class And(Module):
+    """
+    Returns the AND of the input tensors element-wise.
+    """
+
+
+    def forward(self, input):
+        assert isinstance(input, (list, tuple)), "input must be list or tuple"
+        assert len(input) == 2, "input must contain two tensors"
+        return input[0].logical_and(input[1])
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return And()
+
+
+class Or(Module):
+    """
+    Returns the OR of the input tensors element-wise.
+    """
+
+
+    def forward(self, input):
+        assert isinstance(input, (list, tuple)), "input must be list or tuple"
+        assert len(input) == 2, "input must contain two tensors"
+        return input[0].logical_or(input[1])
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Or()
+
+
 class Pow(Module):
     """
     Module that takes input to some power, where the power is an integer.
     """
+
 
     def forward(self, input):
         base, power = input
@@ -1126,6 +1329,7 @@ class Sqrt(Module):
     Module that takes square-root of the input.
     """
 
+
     def forward(self, input):
         return input.sqrt()
 
@@ -1139,6 +1343,7 @@ class Exp(Module):
     Module that calculates the exponential of the given input tensor, element-wise.
     """
 
+
     def forward(self, input):
         return input.exp()
 
@@ -1151,6 +1356,7 @@ class Erf(Module):
     """
     Module that calculates the error function of the given input tensor, element-wise.
     """
+
 
     def forward(self, input):
         return input.erf()
@@ -1166,14 +1372,16 @@ class _Reduce(Module):
     and ONNX ReduceSum (defined here as Sum).
     """
 
-    def __init__(self, dim, keepdim=False, reduction_fn="mean"):
+    def __init__(self, keepdim=False, reduction_fn="mean"):
         super().__init__()
-        self.dim = dim
+        self.dim = None
         self.keepdim = keepdim
         self.reduction_fn = reduction_fn
 
+
     def forward(self, input):
-        return getattr(input, self.reduction_fn)(self.dim, keepdim=self.keepdim)
+        self.dim = tuple(input[1].int().tolist())
+        return getattr(input[0], self.reduction_fn)(self.dim, keepdim=self.keepdim)
 
 
 class Mean(_Reduce):
@@ -1185,15 +1393,15 @@ class Mean(_Reduce):
     (or `len(dim)`) fewer dimension(s).
     """
 
-    def __init__(self, dim, keepdim=False):
-        super().__init__(dim, keepdim, "mean")
+    def __init__(self, keepdim=False):
+        super().__init__(keepdim, "mean")
 
     @staticmethod
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
         keepdim = _identify_bool_attributes_with_defaults(attributes, "keepdims", 1)
-        return Mean(attributes["axes"], keepdim)
+        return Mean(keepdim)
 
 
 class Sum(_Reduce):
@@ -1205,15 +1413,59 @@ class Sum(_Reduce):
     (or `len(dim)`) fewer dimension(s).
     """
 
-    def __init__(self, dim, keepdim=False):
-        super().__init__(dim, keepdim, "sum")
+    def __init__(self, keepdim=False):
+        super().__init__(keepdim, "sum")
 
     @staticmethod
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
         keepdim = _identify_bool_attributes_with_defaults(attributes, "keepdims", 1)
-        return Sum(attributes["axes"], keepdim)
+        return Sum(keepdim)
+
+
+class CumSum(Module):
+    """
+    Performs cumulative sum of the input elements along the given axis
+    """
+
+    def __init__(self, exclusive, reverse):
+        super().__init__()
+        self.exclusive = exclusive
+        self.reverse = reverse
+
+
+    def forward(self, input):
+        assert isinstance(input, (list, tuple)), "input must be list or tuple"
+        assert len(input) == 2, "input must contain two tensors"
+
+        input, axis = input
+
+        if self.reverse:
+            input = torch.flip(input, dims=[axis])
+
+        cumsum_result = torch.cumsum(input, dim=axis)
+
+        if self.exclusive:
+            shift_tensor = torch.zeros_like(input)
+            index_slice = [slice(None)] * input.dim()
+            index_slice[axis] = slice(1, None)
+            shift_tensor[tuple(index_slice)] = cumsum_result[
+                tuple(index_slice[:-1] + [slice(None, -1)])
+            ]
+            cumsum_result = shift_tensor
+
+        if self.reverse:
+            cumsum_result = torch.flip(cumsum_result, dims=[axis])
+
+        return cumsum_result
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return CumSum(
+            attributes.get("exclusive", 0),
+            attributes.get("reverse", 0),
+        )
 
 
 class Transpose(Module):
@@ -1231,6 +1483,7 @@ class Transpose(Module):
     def __init__(self, perm):
         super().__init__()
         self.perm = perm
+
 
     def forward(self, input):
         # New Linear jit tracer causes Transpose module to have a weight
@@ -1251,6 +1504,36 @@ class Transpose(Module):
         return Transpose(attributes["perm"])
 
 
+class Split(Module):
+    r"""
+    Split a tensor into a list of tensors, along the specified 'axis'.
+    Lengths of the parts can be specified using input 'split'.
+    Otherwise, the tensor is split to equal sized parts.
+    """
+
+    def __init__(self, axis: int = 0):
+        super().__init__()
+        self.axis = axis
+
+
+    def forward(self, input):
+        assert isinstance(input, (list, tuple)), "input must be list or tuple"
+        assert len(input) == 2, "input must contain two tensors"
+
+        input, split = input
+
+        if torch.is_tensor(split):
+            split = tuple(int(x) for x in split.tolist())
+
+        return input.split(split, dim=self.axis)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        if attributes is None:
+            attributes = {}
+        return Split(attributes.get("axis", 0))
+
+
 class Squeeze(Module):
     r"""
     Returns a tensor with all the dimensions of :attr:`input` of size `1` removed.
@@ -1266,29 +1549,22 @@ class Squeeze(Module):
 
     .. note:: The returned tensor shares the storage with the input tensor,
             so changing the contents of one will change the contents of the other.
-
-    Args:
-        dimension (int, optional): if given, the input will be squeezed only in
-            this dimension
     """
 
-    def __init__(self, dimension):
-        super().__init__()
-        if isinstance(dimension, (list, tuple)):
-            assert len(dimension) == 1, "can only squeeze one dimension at a time"
-            dimension = dimension[0]
-        self.dimension = dimension
 
     def forward(self, input):
-        return input.squeeze(self.dimension)
+        if isinstance(input, (tuple, list)):
+            data, axes = input
+            assert len(axes) == 1, "can only squeeze one dimension at a time"
+            axes = axes.int().tolist()[0]
+        else:
+            data = input
+            axes = 0
+        return data.squeeze(axes)
 
     @staticmethod
     def from_onnx(attributes=None):
-        if attributes is None:
-            attributes = {}
-        dimension = attributes["axes"]
-        assert len(dimension) == 1, "can only squeeze one dimension at a time"
-        return Squeeze(dimension[0])
+        return Squeeze()
 
 
 class Unsqueeze(Module):
@@ -1301,37 +1577,24 @@ class Unsqueeze(Module):
     A :attr:`dimension` value within the range ``[-input.dim() - 1, input.dim() + 1)``
     can be used. Negative :attr:`dimension` will correspond to :meth:`unsqueeze`
     applied at :attr:`dimension` = ``dim + input.dim() + 1``.
-
-    Args:
-        dimension (int): the index at which to insert the singleton dimension
     """
 
     SUPPORTS_PLAINTEXT_INPUTS = True
 
-    def __init__(self, dimension):
-        super().__init__()
-        if isinstance(dimension, (list, tuple)):
-            assert len(dimension) == 1, "can only squeeze one dimension at a time"
-            dimension = dimension[0]
-        self.dimension = dimension
 
     def forward(self, input):
-        if isinstance(input, list):
-            assert len(input) == 2, "list input must be [x, dimension]"
-            input, dimension = input
-            assert len(dimension) == 1, "can only unsqueeze one dimension at a time"
-            dimension = int(dimension.item())
+        if isinstance(input, (tuple, list)):
+            data, axes = input
+            assert len(axes) == 1, "can only unsqueeze one dimension at a time"
+            axes = axes.int().tolist()[0]
         else:
-            dimension = self.dimension
-        return input.unsqueeze(dimension)
+            data = input
+            axes = 0
+        return data.unsqueeze(axes)
 
     @staticmethod
     def from_onnx(attributes=None):
-        if attributes is None:
-            attributes = {}
-        dimension = attributes.get("axes", [None])
-        assert len(dimension) == 1, "can only unsqueeze one dimension at a time"
-        return Unsqueeze(dimension[0])
+        return Unsqueeze()
 
 
 class Slice(Module):
@@ -1339,59 +1602,52 @@ class Slice(Module):
     Module that slices the input along the specified `axes` (list of `int`s) from
     the indices in `start`s to the indices in `end`s.
 
-    This module definition matches ONNX opset version 11.
+    This module definition matches ONNX opset version 13.
     """
 
-    def __init__(self, starts, ends, axes=None):
-        super().__init__()
-        self.starts = starts
-        self.ends = ends
-        self.axes = axes
 
     def forward(self, x):
-        # Process inputs:
-        axes = None
-        if isinstance(x, list):
-            if len(x) == 3:
-                x, starts, ends = x
-                axes, steps = self.axes, 1
-            elif len(x) == 4:
-                x, starts, ends, axes = x
-                steps = 1
-            elif len(x) == 5:
-                x, starts, ends, axes, steps = x
-                if not torch.eq(steps.int(), 1).all():
-                    raise ValueError("Only steps value of 1 currently supported.")
-            else:
-                raise ValueError("list input x must have 3, 4, or 5, values")
-            starts, ends = starts.int().tolist(), ends.int().tolist()
-        else:
-            starts, ends, axes = self.starts, self.ends, self.axes
-            steps = 1
-        if axes is None:
-            axes = list(range(len(starts)))
+        assert isinstance(x, (list, tuple)), "input must be list or tuple"
 
-        # Perform slicing:
+        if len(x) == 3:
+            x, starts, ends = x
+            axes, steps = list(range(len(starts))), [1] * len(starts)
+        elif len(x) == 4:
+            x, starts, ends, axes = x
+            steps = [1] * len(starts)
+        elif len(x) == 5:
+            x, starts, ends, axes, steps = x
+            if not torch.eq(steps.int(), 1).all():
+                raise ValueError("Only steps value of 1 currently supported.")
+        else:
+            raise ValueError("list input x must have 3, 4, or 5, values")
+
+        starts, ends = starts.int().tolist(), ends.int().tolist()
+
         output = x
         for idx, axis in enumerate(axes):
             start, end = int(starts[idx]), int(ends[idx])
+
+            if start < 0:
+                start += output.size(int(axis))
+            if end < 0:
+                end += output.size(int(axis))
+
             length = min(end, output.size(int(axis))) - start
             output = output.narrow(int(axis), start, length)
+
         return output
 
     @staticmethod
     def from_onnx(attributes=None):
-        return Slice(
-            attributes.get("starts", None),
-            attributes.get("ends", None),
-            axes=attributes.get("axes", None),
-        )
+        return Slice()
 
 
 class Expand(Module):
     """
     Module that expands a tensor to the specified size.
     """
+
 
     def forward(self, x):
 
@@ -1422,6 +1678,7 @@ class Cast(Module):
         super().__init__()
         self.dtype = dtype
 
+
     def forward(self, x):
         if torch.is_tensor(x):
             return x.to(dtype=self.dtype)
@@ -1429,8 +1686,23 @@ class Cast(Module):
 
     @staticmethod
     def from_onnx(attributes=None):
+        # Taken from: https://onnx.ai/onnx/intro/concepts.html#element-type
         dtype = sym_help._get_const(attributes["to"], "i", "dtype")
-        return Cast(dtype=sym_help.scalar_type_to_pytorch_type[dtype])
+        torch_type = {
+            1: torch.float32,  # ONNX FLOAT → torch.float32
+            2: torch.uint8,  # ONNX UINT8 → torch.uint8
+            3: torch.int8,  # ONNX INT8 → torch.int8
+            4: torch.uint16,  # ONNX UINT16 → torch.uint16
+            5: torch.int16,  # ONNX INT16 → torch.int16
+            6: torch.int32,  # ONNX INT32 → torch.int32
+            7: torch.int64,  # ONNX INT64 → torch.int64
+            9: torch.bool,  # ONNX BOOL → torch.bool
+            10: torch.float16,  # ONNX FLOAT16 → torch.float16
+            11: torch.float64,  # ONNX DOUBLE → torch.float64 (torch.double)
+            12: torch.uint32,  # ONNX UINT32 → torch.uint32 (added in PyTorch 2.0)
+            13: torch.uint64,  # ONNX UINT64 → torch.uint64 (added in PyTorch 2.0)
+        }.get(dtype)
+        return Cast(dtype=torch_type)
 
 
 class Range(Module):
@@ -1439,6 +1711,7 @@ class Range(Module):
     """
 
     SUPPORTS_PLAINTEXT_INPUTS = True
+
 
     def forward(self, x):
         if len(x) == 2:
@@ -1460,6 +1733,7 @@ class Equal(Module):
     Module that compares two tensors to determine which elements are equal.
     """
 
+
     def forward(self, x):
         x1, x2 = tuple(x)
         if x1.size() != x2.size():
@@ -1471,11 +1745,194 @@ class Equal(Module):
         return Equal()
 
 
+class Less(Module):
+    """
+    Module that compares two tensors with less-than operator.
+    """
+
+
+    def forward(self, x):
+        x1, x2 = tuple(x)
+        if x1.size() != x2.size():
+            return False
+        return x1.less(x2)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Less()
+
+
+class LessOrEqual(Module):
+    """
+    Module that compares two tensors with less-equal operator.
+    """
+
+
+    def forward(self, x):
+        x1, x2 = x
+        if x1.size() != x2.size():
+            return False
+        return x1.less_equal(x2)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Less()
+
+
+class Greater(Module):
+    """
+    Module that compares two tensors with greater-than operator.
+    """
+
+
+    def forward(self, x):
+        x1, x2 = x
+        if x1.size() != x2.size():
+            return False
+        return x1.greater(x2)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Greater()
+
+
+class GreaterOrEqual(Module):
+    """
+    Module that compares two tensors with greater-equal operator.
+    """
+
+
+    def forward(self, x):
+        x1, x2 = x
+        if x1.size() != x2.size():
+            return False
+        return x1.greater_equal(x2)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Greater()
+
+
+class Sign(Module):
+    """
+    Module that performs a sign operation.
+    """
+
+
+    def forward(self, x):
+        return x.sign()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Sign()
+
+
+class Neg(Module):
+    """
+    Module that performs a neg operation.
+    """
+
+
+    def forward(self, x):
+        return x.neg()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Neg()
+
+
+class Abs(Module):
+    """
+    Module that performs a abs operation.
+    """
+
+
+    def forward(self, x):
+        return x.abs()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Abs()
+
+
+class Log(Module):
+    """
+    Module that performs a log operation.
+    """
+
+
+    def forward(self, x):
+        return x.log()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Log()
+
+
+class Ceil(Module):
+    """
+    Module that performs a ceil operation.
+    """
+
+
+    def forward(self, x):
+        return x.ceil()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Ceil()
+
+
+class Floor(Module):
+    """
+    Module that performs a floor operation.
+    """
+
+
+    def forward(self, x):
+        return x.floor()
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Floor()
+
+
+class Tile(Module):
+    """
+    Module that performs a tile operation.
+    """
+
+
+    def forward(self, x):
+        assert isinstance(
+            x, (list, tuple)
+        ), "Input must contain both input tensor and tile dims"
+        input, dims = x
+        dims = tuple(dims.int().tolist())
+
+        shape = list(input.shape)
+
+        while len(shape) < len(dims):
+            shape.insert(0, 1)
+
+        if len(dims) > len(shape):
+            dims = (1,) * (len(dims) - len(shape)) + dims
+
+        repeated = input.repeat(dims)
+        final_shape = [s * d for s, d in zip(shape, dims)]
+        return repeated.reshape(final_shape)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        return Tile()
+
+
 class Where(Module):
     """
     Module that returns elements from one tensor or the other depending on the
     value of the specified condition.
     """
+
 
     def forward(self, x):
         condition, x1, x2 = tuple(x)
@@ -1497,6 +1954,7 @@ class Flatten(Module):
     def __init__(self, axis=1):
         super().__init__()
         self.axis = axis
+
 
     def forward(self, x):
         if self.axis == 0:
@@ -1532,6 +1990,7 @@ class Shape(Module):
         super().__init__()
         self.dim = dim
 
+
     def forward(self, x, dim=None):
         dim = dim if dim is not None else self.dim
         if dim is None:
@@ -1556,6 +2015,7 @@ class Concat(Module):
     def __init__(self, dimension):
         super().__init__()
         self.dimension = dimension
+
 
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input needs to be a list or tuple"
@@ -1593,6 +2053,7 @@ class Reshape(Module):
         super(Reshape, self).__init__()
         self.shape = shape
 
+
     def forward(self, tensor, shape=None):
         if isinstance(tensor, list) and len(tensor) == 2:
             tensor, shape = tensor
@@ -1626,13 +2087,17 @@ class Dropout(Module):
         - Output: :math:`(*)`. Output is of the same shape as input
     """
 
-    def __init__(self, p=0.5, inplace=False):
+    def __init__(
+        self, p: float = 0.5, training_mode: bool = False, inplace: bool = False
+    ):
         super().__init__()
         if inplace:
             logging.warning(
                 "CrypTen Dropout module does not support inplace computation."
             )
         self.p = p
+        self.training = training_mode
+
 
     def forward(self, input):
         return input.dropout(p=self.p, training=self.training)
@@ -1641,7 +2106,10 @@ class Dropout(Module):
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
-        return Dropout(attributes["ratio"])
+        return Dropout(
+            p=attributes.get("ratio", 0.50),
+            training_mode=attributes.get("training_mode", False),
+        )
 
 
 class DropoutNd(Module):
@@ -1655,13 +2123,17 @@ class DropoutNd(Module):
         p (float, optional): probability of an element to be zero-ed.
     """
 
-    def __init__(self, p=0.5, inplace=False):
+    def __init__(
+        self, p: float = 0.5, training_mode: bool = False, inplace: bool = False
+    ):
         super().__init__()
         if inplace:
             logging.warning(
                 "CrypTen DropoutNd module does not support inplace computation."
             )
         self.p = p
+        self.training = training_mode
+
 
     def forward(self, input):
         return input._feature_dropout(p=self.p, training=self.training)
@@ -1670,7 +2142,10 @@ class DropoutNd(Module):
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
-        return DropoutNd(attributes["ratio"])
+        return DropoutNd(
+            p=attributes.get("ratio", 0.50),
+            training_mode=attributes.get("training_mode", False),
+        )
 
 
 class Dropout2d(DropoutNd):
@@ -1694,7 +2169,10 @@ class Dropout2d(DropoutNd):
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
-        return Dropout2d(attributes["ratio"])
+        return Dropout2d(
+            p=attributes.get("ratio", 0.50),
+            training_mode=attributes.get("training_mode", False),
+        )
 
 
 class Dropout3d(DropoutNd):
@@ -1718,7 +2196,10 @@ class Dropout3d(DropoutNd):
     def from_onnx(attributes=None):
         if attributes is None:
             attributes = {}
-        return Dropout3d(attributes["ratio"])
+        return Dropout3d(
+            p=attributes.get("ratio", 0.50),
+            training_mode=attributes.get("training_mode", False),
+        )
 
 
 class Gather(Module):
@@ -1741,8 +2222,9 @@ class Gather(Module):
 
     def __init__(self, dimension, indices=None):
         super().__init__()
-        self.dimension = dimension
+        self.dimension = dimension if dimension is not None else 0
         self.indices = indices
+
 
     def forward(self, input):
         if not isinstance(input, (list, tuple)):
@@ -1756,11 +2238,10 @@ class Gather(Module):
 
         # indices need to be a PyTorch tensor:
         if curl.is_encrypted_tensor(indices):
-            raise ValueError("Cannot perform Gather operation using encrypted indices.")
-        elif isinstance(indices, (int, list, tuple)):
+            return indices.evaluate_embed(tensor)
+        if isinstance(indices, (int, list, tuple)):
             indices = torch.tensor(indices)
         indices = indices.long()
-
         # CrypTensor input
         if curl.is_encrypted_tensor(tensor):
             result = tensor.take(indices, self.dimension)
@@ -1785,6 +2266,36 @@ class Gather(Module):
         return Gather(attributes["axis"], indices=attributes["shape"])
 
 
+class GatherElements(Module):
+    """
+    Gather elements ONNX logic
+    """
+
+    def __init__(self, axis: int = 0) -> None:
+        super().__init__()
+        self.axis = axis
+
+
+    def forward(self, x):
+        assert isinstance(
+            x, (list, tuple)
+        ), "Input should contain both data and indices"
+
+        data, indices = x
+        indices = indices.int()
+        indices = (indices + data.size(self.axis)) % data.size(self.axis)
+        indices = indices.to(torch.int64)
+
+        return data.gather(index=indices, dim=self.axis)
+
+    @staticmethod
+    def from_onnx(attributes=None):
+        if attributes is None:
+            attributes = {}
+        axis = attributes.get("axis", 0)
+        return GatherElements(axis=axis)
+
+
 class _ConstantPad(Module):
     """
     Module that pads a tensor.
@@ -1797,6 +2308,7 @@ class _ConstantPad(Module):
         self.padding = padding
         self.value = value
         self.mode = mode
+
 
     def forward(self, input):
         if isinstance(input, list):
@@ -1856,6 +2368,7 @@ class Gemm(Module):
         self.trans_a = trans_a
         self.trans_b = trans_b
 
+
     def forward(self, x):
         a, b, c = tuple(x)
         if self.trans_a:
@@ -1893,9 +2406,9 @@ class Linear(Module):
 
     Shape:
         - Input: :math:`(N, *, H_{in})` where :math:`*` means any number of
-          additional dimensions and :math:`H_{in} = \text{in\_features}`
+          additional dimensions and :math:`H_{in} = in_features`
         - Output: :math:`(N, *, H_{out})` where all but the last dimension
-          are the same shape as the input and :math:`H_{out} = \text{out\_features}`.
+          are the same shape as the input and :math:`H_{out} = out_features`.
     """  # noqa: W605
 
     def __init__(self, in_features, out_features, bias=True):
@@ -1906,6 +2419,7 @@ class Linear(Module):
         self.register_parameter("weight", pytorch_module.weight)
         if bias:
             self.register_parameter("bias", pytorch_module.bias)
+
 
     def forward(self, x):
         output = x.matmul(self.weight.t())
@@ -1951,6 +2465,7 @@ class MatMul(Module):
         if weight is not None:
             self.register_parameter("weight", weight)
 
+
     def forward(self, x):
         if hasattr(self, "weight"):
             output = x.matmul(self.weight)
@@ -1978,19 +2493,30 @@ class Attention(Module):
         self.search = Linear(embed_dim, 3 * embed_dim)
         self.proj = Linear(embed_dim, embed_dim)
 
+
     def forward(self, x):
         batch_size = x.shape[0]
         seq_len = x.shape[1]
 
         query, key, value = self.search(x).split(self.embed_dim, dim=2)
-        query = query.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
-        key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
-        value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+        query = query.reshape(
+            batch_size, seq_len, self.num_heads, self.search_dim
+        ).transpose(1, 2)
+        key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(
+            0, 2, 3, 1
+        )
+        value = value.reshape(
+            batch_size, seq_len, self.num_heads, self.search_dim
+        ).transpose(1, 2)
 
         attn = query.matmul(key) / math.sqrt(query.size(-1))
         attn = attn.softmax(dim=-1)
 
-        y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
+        y = (
+            attn.matmul(value)
+            .transpose(1, 2)
+            .reshape(batch_size, seq_len, self.embed_dim)
+        )
         y = self.proj(y)
         return y
 
@@ -2004,6 +2530,7 @@ class Embedding(Module):
         # initialize model parameters:
         pytorch_module = torch.nn.Embedding(vocab_size, embed_dim)
         self.register_parameter("weight", pytorch_module.weight)
+
 
     def forward(self, x):
         output = x.evaluate_embed(self.weight)
@@ -2022,6 +2549,7 @@ class Conv(Module):
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
+
 
     def forward(self, x):
 
@@ -2209,6 +2737,7 @@ class Conv1d(Module):
         self.dilation = dilation
         self.groups = groups
 
+
     def forward(self, x):
         x = x.conv1d(
             self.weight,
@@ -2347,6 +2876,7 @@ class Conv2d(Module):
         self.dilation = dilation
         self.groups = groups
 
+
     def forward(self, x):
         x = x.conv2d(
             self.weight,
@@ -2372,6 +2902,7 @@ class ReLU(Module):
         if inplace:
             logging.warning("CrypTen ReLU module does not support inplace computation.")
 
+
     def forward(self, x):
         return x.relu()
 
@@ -2391,6 +2922,7 @@ class GELU(Module):
         super().__init__()
         if inplace:
             logging.warning("CrypTen GeLU module does not support inplace computation.")
+
 
     def forward(self, input):
         return input.gelu()
@@ -2412,6 +2944,7 @@ class SILU(Module):
         if inplace:
             logging.warning("CrypTen SiLU module does not support inplace computation.")
 
+
     def forward(self, x):
         return x.silu()
 
@@ -2430,6 +2963,7 @@ class Tanh(Module):
         super().__init__()
         if inplace:
             logging.warning("CrypTen Tanh module does not support inplace computation.")
+
 
     def forward(self, x):
         return x.tanh()
@@ -2485,13 +3019,17 @@ class Hardtanh(Module):
                 "CrypTen Hardtanh module does not support inplace computation."
             )
 
+
     def forward(self, input):
         if isinstance(input, list):
             input, min_val, max_val = input
             min_val, max_val = min_val.item(), max_val.item()
         else:
             min_val, max_val = self.min_val, self.max_val
-        return input.hardtanh(min_val, max_val)
+        result = input.clone()
+        result[input < min_val] = -1
+        result[input > max_val] = 1
+        return result
 
     @staticmethod
     def from_onnx(attributes=None):
@@ -2531,12 +3069,14 @@ class ReLU6(Hardtanh):
             )
         super(ReLU6, self).__init__(min_val=0, max_val=6, inplace=False)
 
+
 class Sigmoid(Module):
     r"""Applies the element-wise function:
 
     .. math::
         \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
     """
+
 
     def forward(self, x):
         return x.sigmoid()
@@ -2574,7 +3114,13 @@ class Softmax(Module):
         super().__init__()
         self.dim = dim
 
+
     def forward(self, input):
+        # Update: making interval of input to be [-32, 32] to avoid overflow
+        condition = input > -32
+        input = curl.where(condition, input, torch.tensor(-32))
+        # condition = (input < 32)
+        # input = curl.where(condition, input, torch.tensor(32))
         return input.softmax(self.dim)
 
     @staticmethod
@@ -2609,6 +3155,7 @@ class LogSoftmax(Module):
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
+
 
     def forward(self, input):
         return input.log_softmax(self.dim)
@@ -2657,6 +3204,7 @@ class _Pool2d(Module):
         self.padding = padding
         self.stride = stride
         self.ceil_mode = ceil_mode
+
 
     def forward(self, x):
         args = [self.kernel_size]
@@ -2804,6 +3352,7 @@ class AdaptiveAvgPool2d(Module):
     def extra_repr(self) -> str:
         return "output_size={}".format(self.output_size)
 
+
     def forward(self, input_tensor, output_size=None):
         if output_size is None:
             output_size = self.output_size
@@ -2857,6 +3406,7 @@ class AdaptiveMaxPool2d(Module):
     def extra_repr(self) -> str:
         return "output_size={}".format(self.output_size)
 
+
     def forward(self, input_tensor, output_size=None):
         if output_size is None:
             output_size = self.output_size
@@ -2882,6 +3432,7 @@ class GlobalAveragePool(Module):
     with kernel size equal to the spatial dimension of input tensor. This is an
     operation from the ONNX specification.
     """
+
 
     def forward(self, input):
         assert input.dim() > 2, "input needs to have more than two dimensions"
@@ -2913,11 +3464,11 @@ class LayerNormalization(Module):
         self.eps = eps
         self.inv_var = None
 
+
     def forward(self, x):
         assert len(x) == 3, f"LayerNormalization expects 3 inputs, not {len(x)}"
         input, weight, bias = x
 
-        # perform batch normalization:
         output = input.layernorm(
             weight,
             bias,
@@ -2938,6 +3489,7 @@ class LayerNormalization(Module):
             eps=attributes.get("epsilon", 1e-05),
         )
 
+
 class LayerNorm(Module):
     def __init__(self, shape, eps=1e-05):
         super().__init__()
@@ -2952,6 +3504,7 @@ class LayerNorm(Module):
 
         # do not precompute inverse variance during training
         self.inv_var = None
+
 
     def forward(self, input):
         return input.layernorm(
@@ -2978,6 +3531,7 @@ class BatchNormalization(Module):
         self.momentum = momentum
         self.inv_var = None
         self._running_var_id = None
+
 
     def forward(self, x):
         assert len(x), f"BatchNormalization expects 5 inputs, not {len(x)}"
@@ -3051,6 +3605,7 @@ class _BatchNorm(Module):
 
         # do not precompute inverse variance during training
         self.inv_var = None
+
 
     def forward(self, input):
         return input.batchnorm(
