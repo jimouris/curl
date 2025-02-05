@@ -72,7 +72,7 @@ class EvaluatorClient:
             requests = [None] * evaluators_size
             for i in range(evaluators_size):
                 evaluator_rank = world_size + i
-                requests[i] = communicator.isend(chunks[i].share.contiguous(), evaluator_rank, self.eval_group)
+                requests[i] = communicator.isend(chunks[i].share, evaluator_rank, self.eval_group)
             # Wait for all async requests to complete and retrieve messages
             for req in requests:
                 req.wait()
@@ -177,7 +177,7 @@ class EvaluatorServer:
                 results = [torch.empty(tensor_size, dtype=torch.long) for _ in range(world_size)]
                 requests = [None] * world_size
                 for mpc_node in range(world_size):
-                    requests[mpc_node] = communicator.irecv(results[mpc_node].contiguous(), mpc_node, self.eval_group)
+                    requests[mpc_node] = communicator.irecv(results[mpc_node], mpc_node, self.eval_group)
                 # Wait for all async requests to complete and retrieve messages
                 for req in requests:
                     req.wait()

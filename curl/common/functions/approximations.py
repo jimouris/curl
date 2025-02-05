@@ -361,7 +361,7 @@ def permute_reveal_evaluate_share(self, func):
     """
     size = self.size()
     if func in ("softmax", "log_softmax"):
-        result = self.flatten(0, -2)
+        result = self.flatten(0, -2) # leave the last dimension
     else:
         result = self.flatten()
     result, inv_perm = result.shuffle()

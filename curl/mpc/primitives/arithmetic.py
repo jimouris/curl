@@ -18,7 +18,8 @@ from curl.cryptensor import CrypTensor
 from curl.cuda import CUDALongTensor
 from curl.encoder import FixedPointEncoder
 
-from . import beaver, replicated  # noqa: F401
+from . import beaver, plaintext, replicated  # noqa: F401
+from .util import IgnoreEncodings
 
 
 SENTINEL = -1
@@ -545,7 +546,7 @@ class ArithmeticSharedTensor:
 
     def egk_truncmod_pr(self, l, m):
         divisor = self.egk_trunc_pr(l, m)
-        with beaver.IgnoreEncodings([self, divisor]):
+        with IgnoreEncodings([self, divisor]):
             remainder = self - divisor * 2**m
         return divisor, remainder
 
@@ -686,7 +687,7 @@ class ArithmeticSharedTensor:
         """Evaluate a embedding on the input tensor."""
         protocol = globals()[cfg.mpc.protocol]
         self.share = protocol.evaluate_embed(self, embed.share).share
-        self.encoder._precision_bits = embed.encoder._precision_bits
+        self.encoder._precision_bits = embed.encoder.precision_bits
         return self
 
     def shuffle(self):
