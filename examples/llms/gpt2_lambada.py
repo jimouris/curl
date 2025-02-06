@@ -108,7 +108,14 @@ def run_gpt2_lambada(cfg_file, fill_cache=False, communication=False, device=Non
     my_input = "What is your name?"
     tokenized_input = tokenizer(my_input, return_tensors='pt')
     print(f"{tokenized_input=}")
-    tokenized_input_ids_enc = curl.cryptensor(tokenized_input['input_ids'])
+    tokenized_input_ids_enc = curl.cryptensor(tokenized_input['input_ids'], precision=0)
+    print(f'{tokenized_input['input_ids']=}')
+    print(f'{tokenized_input_ids_enc.get_plain_text()=}')
+
+# tokenized_input_ids_enc.get_plain_text()=tensor([[2061,  318,  534, 1438,   30]])
+#  x: array([[0.031448, 0.004852, 0.008148, 0.021942, 0.000458]], dtype=float32)
+#  y: array([[2061,  318,  534, 1438,   30]])
+
     tokenized_attention_mask_enc = curl.cryptensor(tokenized_input['attention_mask'])
     print('running private model')
     private_output = private_model(tokenized_input_ids_enc, tokenized_attention_mask_enc)

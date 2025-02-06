@@ -86,7 +86,7 @@ class ArithmeticSharedTensor:
             device = tensor.device
 
         # encode the input tensor:
-        self.encoder = FixedPointEncoder(precision_bits=precision)
+        self._encoder = FixedPointEncoder(precision_bits=precision)
         if tensor is not None:
             if is_int_tensor(tensor) and precision != 0:
                 tensor = tensor.float()
@@ -102,6 +102,18 @@ class ArithmeticSharedTensor:
         self.share = ArithmeticSharedTensor.PRZS(size, device=device).share
         if self.rank == src:
             self.share += tensor
+
+    @property
+    def encoder(self):
+        """Returns encoder"""
+        return self._encoder
+
+    @encoder.setter
+    def encoder(self, value):
+        """Sets encoder to value making sure it's copied to avoid sharing the same encoder
+        This could cause errors such as accidentally rescaling output tensors who shouldn't be rescaled
+        """
+        self._encoder = value.copy()
 
     @staticmethod
     def new(*args, **kwargs):
@@ -151,7 +163,7 @@ class ArithmeticSharedTensor:
         result = ArithmeticSharedTensor(src=SENTINEL)
         share = share.to(device) if device is not None else share
         result.share = CUDALongTensor(share) if share.is_cuda else share
-        result.encoder = FixedPointEncoder(precision_bits=precision)
+        result._encoder = FixedPointEncoder(precision_bits=precision)
         return result
 
     @staticmethod
@@ -318,7 +330,7 @@ class ArithmeticSharedTensor:
         else:
             scale_factor = self.encoder.scale // new_encoder.scale
             self = self.div_(scale_factor)
-        self.encoder = new_encoder
+        self.encoder = new_encoder.copy()  #
         return self
 
     def encode(self, new_encoder):
@@ -387,6 +399,7 @@ class ArithmeticSharedTensor:
                         y.encoder._precision_bits = cfg.encoder.precision_bits
                 # Re-encode if necessary:
                 if self.encoder.scale > y.encoder.scale:
+                    y = y.clone()  # avoid modifying y in-place
                     y.encode_as_(result)
                 elif self.encoder.scale < y.encoder.scale:
                     result.encode_as_(y)
@@ -516,7 +529,7 @@ class ArithmeticSharedTensor:
             y = torch.tensor([y], dtype=torch.float, device=self.device)
 
         assert is_float_tensor(y), "Unsupported type for div_: %s" % type(y)
-        return self.mul_(y.reciprocal())
+        return self.mul(y.reciprocal())
 
     def divmod(self, y):
         """

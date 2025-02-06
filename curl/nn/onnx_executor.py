@@ -206,6 +206,10 @@ class ONNXExecutor:
             result = np.maximum.reduce(inputs)
         elif op_type == "Min":
             result = np.minimum.reduce(inputs)
+        elif op_type == "Less":
+            print(f"{inputs=}")
+            result = np.less(*inputs)
+            print(f"{result}")
         elif op_type == "Exp":
             ##self.check_range_bitwidth(inputs[0], "exp")
             result = np.exp(inputs[0])
@@ -447,10 +451,14 @@ class ONNXExecutor:
                 12: np.uint32,
                 13: np.uint64,
             }.get(to_type)
-            logging.info("[CT] to_type: ", numpy_type)
+            logging.info(f"[CT] to_type: {numpy_type}")
             if numpy_type is None:
                 raise ValueError(f"Unsupported 'to' type in Cast operation: {to_type}")
-            result = inputs[0].astype(numpy_type)
+            print("Cast inputs:", inputs, 'to', numpy_type)
+            if isinstance(inputs[0], torch.Tensor):
+                result = inputs[0].numpy().astype(numpy_type)
+            else:
+                result = inputs[0].astype(numpy_type)
 
         elif op_type == "Where":
             condition, x, y = inputs

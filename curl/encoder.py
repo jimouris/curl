@@ -12,6 +12,7 @@ import torch
 
 from .common.tensor_types import is_float_tensor, is_int_tensor
 from .config import cfg
+import copy
 from .cryptensor import CrypTensor
 
 
@@ -37,6 +38,25 @@ class FixedPointEncoder:
             precision_bits = cfg.encoder.precision_bits
         self._precision_bits = precision_bits
         self._scale = int(2**precision_bits)
+
+    def __copy__(self):
+        """Shallow copy of FixedPointEncoder instance."""
+        return FixedPointEncoder(self._precision_bits)
+
+    def __deepcopy__(self, memo):
+        """Deep copy of FixedPointEncoder instance."""
+        # Create a new instance with a deep copy of the precision bits.
+        new_copy = FixedPointEncoder(copy.deepcopy(self._precision_bits, memo))
+        memo[id(self)] = new_copy
+        return new_copy
+
+    def copy(self):
+        """Shallow copy of FixedPointEncoder instance."""
+        return copy.copy(self)
+
+    def deepcopy(self):
+        """Deep copy of FixedPointEncoder instance."""
+        return copy.deepcopy(self)
 
     def encode(self, x, device=None):
         """Helper function to wrap data if needed"""

@@ -23,6 +23,7 @@ LOWER_BOUND = -UPPER_BOUND
 
 
 def clamp_int64(x):
+    return x
     if isinstance(x, torch.Tensor):
         max_value = UPPER_BOUND
         min_value = LOWER_BOUND
@@ -703,7 +704,7 @@ class Graph(Container):
             self._modules = modules
         if graph is not None:
             self._graph = graph
-
+        self.node_index = 0
         self.onnx_executor = onnx_executor
 
     def add_module(self, name, module, input_names=None, output_names=None):
@@ -726,9 +727,15 @@ class Graph(Container):
 
     #
     def forward(self, *args):
-
+        logging.info(f"[{self.node_index}] Node Index: {self.node_index}")
+        self.node_index += 1
 
         def check(x, y):
+            if isinstance(x, bool):
+                x = torch.tensor(x)
+
+            if isinstance(y, bool):
+                y = torch.tensor(y)
             np.testing.assert_allclose(x.numpy(), y, rtol=0.01, atol=0.01)
             try:
                 np.testing.assert_allclose(x.numpy(), y, rtol=0.1, atol=0.1)
@@ -820,7 +827,7 @@ class Graph(Container):
                 for name, ii, jj in zip(
                     self._graph[node_to_compute], input, onnx_inputs
                 ):
-                    logging.debug(
+                    logging.info(
                         f"[INPUT CHECK] [{name}] Ciphertext: [{type(ii)} {ii.shape}] Cleartext: [{type(jj)} {jj.shape}]"
                         f"[{ii.encoder._precision_bits if isinstance(ii, curl.mpc.mpc.MPCTensor) else ''}]"
                     )
@@ -831,6 +838,7 @@ class Graph(Container):
             output = module(
                 input[0] if len(input) == 1 else input
             )  # CIPHERTEXT EXECUTION
+            print(f"[Node {self.node_index}] {module}")
 
             if self.onnx_executor is not None and not isinstance(module, Parameter):
                 # Checking inputs after computation
@@ -840,7 +848,7 @@ class Graph(Container):
                 for name, ii, jj in zip(
                     self._graph[node_to_compute], input, onnx_inputs
                 ):
-                    logging.debug(
+                    logging.info(
                         f"[INPUT Bi-CHECK] [{name}] Ciphertext: [{type(ii)} {ii.shape}] Cleartext: [{type(jj)} {jj.shape}]"
                         f"[{ii.encoder._precision_bits if isinstance(ii, curl.mpc.mpc.MPCTensor) else ''}]"
                     )
@@ -855,9 +863,10 @@ class Graph(Container):
                 ct_out = output  # Copy output to ct_out
                 if isinstance(output, curl.mpc.mpc.MPCTensor):
                     ct_out = ct_out.get_plain_text()
-                logging.debug(
-                    f"[COMP] {type(output)} -> {type(ct_out)}({output.shape}) vs {type(cleartext_output)}({cleartext_output.shape})"
-                )
+                if not isinstance(output, bool) and not isinstance(output, tuple):
+                    logging.info(
+                        f"[COMP] {type(output)} -> {type(ct_out)}({output.shape}) vs {type(cleartext_output)}({cleartext_output.shape})"
+                    )
                 check(ct_out, cleartext_output)
 
             # we may get one output:
@@ -1220,6 +1229,8 @@ class Sub(Module):
     def forward(self, input):
         assert isinstance(input, (list, tuple)), "input must be list or tuple"
         assert len(input) == 2, "input must contain two tensors"
+        if isinstance(input[0], torch.Tensor):
+            input[0] = curl.cryptensor(input[0], precision=input[1].encoder.precision_bits)
         return input[0].sub(input[1])
 
     @staticmethod
@@ -1753,8 +1764,8 @@ class Less(Module):
 
     def forward(self, x):
         x1, x2 = tuple(x)
-        if x1.size() != x2.size():
-            return False
+        # if x1.size() != x2.size():
+            # return False
         return x1.less(x2)
 
     @staticmethod
