@@ -2,6 +2,8 @@
 **/tuple_cache/request_cache-*
 *.txt
 
+*.onnx
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

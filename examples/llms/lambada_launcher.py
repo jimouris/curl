@@ -10,7 +10,7 @@ from examples.multiprocess_launcher import MultiProcessLauncher
 
 
 '''
-python examples/llms/gpt2_lambada_launcher.py --world_size 2 --multiprocess --evaluator_size 2
+python examples/llms/lambada_launcher.py --world_size 2 --multiprocess --evaluator_size 2
 '''
 
 def get_args():
@@ -92,7 +92,7 @@ def get_config(args):
 
 def _run_experiment(args):
     # only import here to initialize curl within the subprocesses
-    from examples.llms.gpt2_lambada import run_gpt2_lambada
+    from examples.llms.llms_lambada import evaluate_lambada_curl
 
     # Only Rank 0 will display logs.
     level = logging.INFO
@@ -101,12 +101,11 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_gpt2_lambada(cfg_file, args.fill_cache, args.communication, args.device)
+    evaluate_lambada_curl(cfg_file, args.fill_cache, args.communication, args.device)
 
     print('Done')
 
 def main():
-    print('Running GPT2 over private data')
     args = get_args()
     cfg_file = get_config(args)
     curl.cfg.load_config(cfg_file)
@@ -123,9 +122,8 @@ def main():
         _run_experiment(args)
 
 def main_clear():
-    from gpt2_lambada import evaluate_clear_gpt2_on_lambada
-    print('Running GPT2 over clear data')
-    evaluate_clear_gpt2_on_lambada()
+    from llms_lambada import evaluate_lambada_clear
+    evaluate_lambada_clear()
 
 if __name__ == "__main__":
     main()

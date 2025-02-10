@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForMaskedLM
+
 from datasets import load_dataset
 
 import logging
@@ -12,18 +14,27 @@ import torch.utils.data.distributed
 from curl.config import cfg
 import curl.communicator as comm
 
+# MODEL_NAME = 'gpt2'
+MODEL_NAME = 'HuggingFaceTB/SmolLM2-135M-Instruct'
+# MODEL_NAME = 'answerdotai/ModernBERT-base'
 
-def evaluate_clear_gpt2_on_lambada():
+def evaluate_lambada_clear():
     # Load the LAMBADA dataset
     dataset = load_dataset('cimec/lambada', split='test')
     print('LAMBADA loaded')
 
     # Load pre-trained GPT-2 tokenizer and model
-    model_name = 'gpt2'
-    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-    model = GPT2LMHeadModel.from_pretrained(model_name)
+    if MODEL_NAME == 'gpt2':
+        tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
+        model = GPT2LMHeadModel.from_pretrained(MODEL_NAME)
+    elif MODEL_NAME == 'HuggingFaceTB/SmolLM2-135M-Instruct':
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+    elif MODEL_NAME == 'answerdotai/ModernBERT-base':
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        model = AutoModelForMaskedLM.from_pretrained(MODEL_NAME)
     model.eval()
-    print('GPT2 loaded')
+    print(f'{MODEL_NAME} loaded')
 
     correct_predictions = 0
     total_predictions = 0
@@ -36,6 +47,7 @@ def evaluate_clear_gpt2_on_lambada():
         # Tokenize context
         inputs = tokenizer(context, return_tensors='pt')
         input_ids = inputs['input_ids']
+        # print(f"Input shape: {inputs['input_ids'].shape}")
 
         # Get model predictions
         with torch.no_grad():
@@ -56,22 +68,7 @@ def evaluate_clear_gpt2_on_lambada():
     print(f'LAMBADA Accuracy [Dataset size: {total_predictions}]: {accuracy:.4f}')
 
 
-# def evaluate_private_gpt2_on_lambada(dataset, model, tokenizer):
-#     correct_predictions = 0
-#     total_predictions = 0
-#     for example in dataset:
-#
-#
-#         if predicted_word == target_word:
-#             correct_predictions += 1
-#         total_predictions += 1
-#         if total_predictions >= 10:
-#             break
-#     accuracy = correct_predictions / total_predictions
-#     print(f'LAMBADA Accuracy [Dataset size: {total_predictions}]: {accuracy:.4f}')
-
-
-def run_gpt2_lambada(cfg_file, fill_cache=False, communication=False, device=None):
+def evaluate_lambada_curl(cfg_file, fill_cache=False, communication=False, device=None):
     curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
@@ -89,20 +86,33 @@ def run_gpt2_lambada(cfg_file, fill_cache=False, communication=False, device=Non
     else:
         provider.load_cache()
 
-    # Load pre-trained GPT-2 tokenizer and model
-    model_name = 'gpt2'
-    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+    # Load pre-trained tokenizer and model
+    if MODEL_NAME == 'gpt2':
+        tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
+    elif (MODEL_NAME == 'HuggingFaceTB/SmolLM2-135M-Instruct' or
+          MODEL_NAME == 'answerdotai/ModernBERT-base'):
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     # Obtain the model by running: python3 -m transformers.onnx --model=gpt2 onnx/ --opset=20
-    onnx_file_path = "./examples/llms/model.onnx"
-    print(f'Loading GPT2 with ONNX: {onnx_file_path}')
-    with open(onnx_file_path, "rb") as f:
-        private_model = curl.nn.from_onnx(f, track_execution=True)
-        print(type(private_model))
-        print('Encrypting the model')
-        private_model.encrypt()
-        print(type(private_model))
-    print('Successfully loaded encrypted GPT2')
+    onnx_file_path = None
+    if MODEL_NAME == 'gpt2':
+        onnx_file_path = "./examples/llms/models/gpt2.onnx"
+    elif MODEL_NAME == 'HuggingFaceTB/SmolLM2-135M-Instruct':
+        onnx_file_path = "./examples/llms/models/SmolLM2-135M-Instruct.onnx"
+    elif MODEL_NAME == 'answerdotai/ModernBERT-base':
+        model = AutoModelForMaskedLM.from_pretrained(MODEL_NAME)
+        dummy_input = torch.empty([1, 45])
+        private_model = curl.nn.from_pytorch(model, dummy_input).encrypt(src=0)
+
+    if onnx_file_path is not None:
+        print(f'Loading GPT2 with ONNX: {onnx_file_path}')
+        with open(onnx_file_path, "rb") as f:
+            private_model = curl.nn.from_onnx(f, track_execution=True)
+            print(type(private_model))
+            print('Encrypting the model')
+            private_model.encrypt()
+    print(type(private_model))
+    print(f'Successfully loaded encrypted {MODEL_NAME}')
 
     print('Tokenizing')
     my_input = "What is your name?"
