@@ -48,9 +48,7 @@ class DistributedCommunicator(Communicator):
 
             # initialize process group:
             total_ws = self.world_size + 1 if init_ttp else self.world_size
-            logging.info(f"DistributedCommunicator ({self.rank}): Total world size {total_ws}, init_ttp: {init_ttp}")
-            logging.info(f"distributed_backend ({self.rank}): {self.distributed_backend}")
-            logging.info(f"rendezvous ({self.rank}): {self.rendezvous}")
+            logging.info(f"[Party {self.rank}][Distributed Com] Total WS: {total_ws}, TTP: {init_ttp}, Backend: {self.distributed_backend}, rendezvous: {self.rendezvous}")
 
             dist.init_process_group(
                 backend=self.distributed_backend,

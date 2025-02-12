@@ -81,7 +81,7 @@ def get_args():
         action="store_true",
         help="Skip embeddings and softmax",
     )
-    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'all']
+    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge']
     parser.add_argument(
         "--model",
         choices=models,
@@ -128,13 +128,10 @@ def _run_experiment(args):
     # Only Rank 0 will display logs.
     level = logging.INFO
     if "RANK" in os.environ and os.environ["RANK"] != "0":
-        level = logging.CRITICAL
+        level = logging.DEBUG
     logging.getLogger().setLevel(level)
+    run_llm(args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device)
 
-    cfg_file = get_config(args)
-    run_llm(cfg_file, args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device)
-
-    print('Done')
 
 def main():
     args = get_args()

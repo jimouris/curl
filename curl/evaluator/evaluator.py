@@ -42,7 +42,7 @@ class EvaluatorClient:
             communicator = comm.get()
             self.eval_group = communicator.eval_group
             self.eval_comm_group = communicator.eval_comm_group
-            logging.info(f"EvaluatorClient {communicator.get_rank()} initialized")
+            logging.info(f"[Party {communicator.get_rank()}] Evaluator Client initialized")
 
         def evaluator_request(self, func_name, tensor, *args, **kwargs):
             communicator = comm.get()
@@ -90,7 +90,7 @@ class EvaluatorClient:
             tensor.share = torch_cat(results)
             tensor.encoder._precision_bits = cfg.encoder.precision_bits
             return tensor
-        
+
     @staticmethod
     def _init():
         """Initializes a Evaluator client that sends requests"""

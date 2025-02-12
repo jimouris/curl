@@ -346,6 +346,7 @@ class LookupTables:
         if "cuda" in device:
             for lut in cls.LUTs:
                 cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
+# TODO
         print(f'[Device] LUTs initialized for {device}\n')
 
 def permute_reveal_evaluate_share(self, func):

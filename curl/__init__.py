@@ -84,8 +84,13 @@ def init(config_file=None, party_name=None, device=None):
         _setup_prng()
         if curl.mpc.ttp_required():
             curl.mpc.provider.ttp_provider.TTPClient._init()
-        # Initialize the LUTs for the computing parties
-        curl.common.functions.approximations.LookupTables(device=device)
+
+        # Initialize the LUTs for the computing parties, if needed
+        for k, v in cfg.config.functions.items():
+            v = dict(v)
+            if "haar" in v['method'] or "bior" in v['method']:
+                curl.common.functions.approximations.LookupTables(device=device)
+                break
 
         if comm.get().get_evaluators_size() > 0:
             curl.evaluator.EvaluatorClient._init()

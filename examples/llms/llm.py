@@ -69,14 +69,7 @@ class LLMs:
         self.df = None
         self.full = full
         model = model.lower()
-        if model is None or model == 'all':
-            self.models = []
-            for m in all_models.values():
-                m_clear = m(seq_len=tensor_size[1], full=full)
-                if hasattr(m_clear, "to"):
-                    m_clear = m_clear.to(self.device)
-                self.models.append(m_clear.encrypt(src=0))
-        elif model in all_models:
+        if model in all_models:
             m_clear = all_models[model](seq_len=tensor_size[1], full=full)
             if hasattr(m_clear, "to"):
                 m_clear = m_clear.to(self.device)
@@ -86,7 +79,7 @@ class LLMs:
 
     def __repr__(self):
         if self.df is not None:
-            return self.df.to_string(index=False, justify="left")
+            return " ".join(self.df.astype(str).values.flatten())
         return "No Function Benchmarks"
 
     @staticmethod
@@ -96,10 +89,6 @@ class LLMs:
 
     def get_runtimes(self):
         """Returns plain text and curl runtimes"""
-
-        rank = comm.get().get_rank()
-        print(f'[Device] Party-{rank} running in {self.device}')
-
         runtimes_enc = []
         for llm in self.models:
             if self.full:
@@ -126,11 +115,12 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, model, fill_cache=False, communication=False, full=True, device=None):
-    logging.info("Tensor size '{}'".format(tensor_size))
+def run_llm(tensor_size, model, fill_cache=False, communication=False, full=True, device=None):
+    rank = comm.get().get_rank()
+    logging.info(f"[Party {rank}][Device] running in {device}")
+    logging.info(f"[Party {rank}] Tensor size {tensor_size}")
 
     # First cold run.
-    curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
@@ -138,24 +128,26 @@ def run_llm(cfg_file, tensor_size, model, fill_cache=False, communication=False,
     filtered_data = {
         key: dict(value)['method'] for key, value in functions_data.items() if 'method' in dict(value)
     }
-    logging.info("\t'{}'".format(filtered_data))
+    logging.info(f"[Party {rank}] Config: {filtered_data}")
 
     provider = curl.mpc.get_default_provider()
     if fill_cache:
-        logging.info(f"=" * 22 + " Tracing requests for the cache " + "=" * 22)
+        logging.info(f"[Party {rank}] Tracing requests for the cache " + "=" * 20)
         provider.trace_once()
     else:
         provider.load_cache()
 
     benches = LLMs(model, tensor_size, device=device, full=full)
     benches.run()
-    logging.info("'\n{}\n'".format(benches))
-    logging.info("="*60)
+
+    logging.info(f"[Party {rank}] {benches}")
 
     if fill_cache:
-        logging.info(f"=" * 22 + " Filling the cache " + "=" * 22)
+        logging.info(f"[Party {rank}] Filling the cache " + "=" * 20)
         provider.fill_cache()
 
     if communication:
         comm.get().print_communication_stats()
         exit(0)
+
+    logging.info(f"[Party {rank}] Done")
