@@ -16,6 +16,7 @@ from curl.config import cfg
 from curl.cuda import CUDALongTensor
 
 from curl.evaluator.evaluator import EvaluatorClient
+import curl.communicator as comm
 
 __all__ = [
     "exp",
@@ -346,8 +347,7 @@ class LookupTables:
         if "cuda" in device:
             for lut in cls.LUTs:
                 cls.LUTs[lut] = CUDALongTensor(cls.LUTs[lut], device=device)
-# TODO
-        print(f'[Device] LUTs initialized for {device}\n')
+        print(f'[Party {comm.get().get_rank()}][Device] LUTs initialized for {device}\n')
 
 def permute_reveal_evaluate_share(self, func):
     """

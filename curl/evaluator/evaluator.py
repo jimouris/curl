@@ -119,25 +119,24 @@ class EvaluatorServer:
         """Initializes an Evaluator server that receives requests"""
         self.generator = torch.Generator()
         self.cfg_file = curl.cfg.get_default_config_path()
+        rank = comm.get().get_rank()
 
         # Initialize connection
-        logging.info("EvaluatorServer: Initializing...")
+        logging.info(f"[Evaluator {rank}]: Initializing...")
 
         env_vars = {}
         for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
             if key.upper() not in os.environ:
                 raise ValueError("Environment variable %s must be set." % key)
             env_vars[key.lower()] = os.environ[key.upper()]
-
-        logging.info("EvaluatorServer: before crypten init.")
-        logging.info(f"EvaluatorServer: env: {env_vars}")
-        curl.init()
-        logging.info("EvaluatorServer: crypten init done.")
-
         communicator = comm.get()
         self.eval_group = communicator.eval_group
+
+        # Determine device
+        # if torch.cuda.is_available():
+        # else:
         self.device = "cpu"
-        logging.info("EvaluatorServer Initialized")
+        logging.info(f"[Evaluator {rank}] Initialized with device: {self.device}")
         evaluator_rank = communicator.get_rank()
         world_size = communicator.get_world_size()
 

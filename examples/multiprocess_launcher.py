@@ -77,7 +77,6 @@ class MultiProcessLauncher:
                     ttp_device,
                 ),
             )
-            # self.processes.append(self.ttp_process)
 
         for rank in range(evaluator_size):
             evaluator_rank = world_size + rank
@@ -132,6 +131,11 @@ class MultiProcessLauncher:
 
     def join(self):
         for process in self.processes:
+            process.join()
+            assert (
+                process.exitcode == 0
+            ), f"{process.name} has non-zero exit code {process.exitcode}"
+        for process in self.eval_processes:
             process.join()
             assert (
                 process.exitcode == 0

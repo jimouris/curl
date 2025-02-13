@@ -89,6 +89,7 @@ def init(config_file=None, party_name=None, device=None):
         for k, v in cfg.config.functions.items():
             v = dict(v)
             if "haar" in v['method'] or "bior" in v['method']:
+                logging.info(f"[Party {comm.get().get_rank()}] Initializing LUTs in {device}")
                 curl.common.functions.approximations.LookupTables(device=device)
                 break
 

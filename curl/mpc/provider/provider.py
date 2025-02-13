@@ -74,7 +74,7 @@ class TupleProvider:
         if os.path.exists(filepath):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=FutureWarning)
-                self.request_cache = torch.load(filepath)
+                self.request_cache = torch.load(filepath, weights_only=False)
         else:
             curl.log(f"Cache requests not loaded - File `{filepath}` not found")
 
@@ -111,7 +111,7 @@ class TupleProvider:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=FutureWarning)
-                    batch_data = torch.load(batch_path)
+                    batch_data = torch.load(batch_path, weights_only=False)
                 for key, values in batch_data.items():
                     if key in self.tuple_cache:
                         self.tuple_cache[key].extend(values)
