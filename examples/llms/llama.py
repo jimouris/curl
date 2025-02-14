@@ -39,10 +39,10 @@ class LlamaTokenizer:
             "<|reserved_special_token_4|>",
             "<|eot_id|>",  # end of turn
         ] + [f"<|reserved_special_token_{i}|>" for i in range(5, 256 - 5)]
-
+        tokenizer_path = tokenizer_path + "tokenizer.model"
         self.mergeable_ranks = load_tiktoken_bpe(tokenizer_path)
         self.tokenizer = tiktoken.Encoding(
-            name=Path(tokenizer_path).name,
+            name=Path(tokenizer_path + "tokenizer.model").name,
             pat_str=r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+",
             mergeable_ranks=self.mergeable_ranks,
             special_tokens={
@@ -61,6 +61,17 @@ class LlamaTokenizer:
         tokens = [128000] + self.encode(prompt)
         return torch.tensor(tokens)
 
+class Embedding(nn.Module):
+    def __init__(self, vocab_size, dim):
+        super().__init__()
+        self.embedding_layer = torch.nn.Embedding(vocab_size, dim)
+
+    def forward(self, tokens):
+        token_embeddings_unnormalized = self.embedding_layer(tokens)
+        return token_embeddings_unnormalized
+
+    def load_weights(self, model):
+        self.embedding_layer.weight.data.copy_(model["tok_embeddings.weight"])
 
 class RMSNorm(nn.Module):
     def __init__(self, norm_eps, norm_weights_size = 2048):
@@ -68,132 +79,102 @@ class RMSNorm(nn.Module):
         self.norm_eps = norm_eps
         self.norm_weights = nn.Parameter(torch.ones(norm_weights_size))
 
-    def forward(self, tensor, norm_weights):
+    def forward(self, tensor):
         return (
             tensor * torch.rsqrt(tensor.pow(2).mean(-1, keepdim=True) + self.norm_eps)
-        ) * norm_weights
+        ) * self.norm_weights
     
-    def load_weights(self, weights):
-        self.norm_weights.data.copy_(weights)
+    def load_weights(self, model, layer):
+        self.norm_weights.data.copy_(model[layer])
 
-class RoPEEmbedding(nn.Module):
-    def __init__(self, rope_theta, max_seq_len):
+class RotaryEmbedding(nn.Module):
+
+
+    def __init__(self, rope_theta, head_dim, max_seq_len):
         super().__init__()
         self.rope_theta = rope_theta
         self.max_seq_len = max_seq_len
+        self.head_dim = head_dim
+        self.register_buffer("freqs_cis", self.calculate_rope_frequencies())
 
-class Llama(nn.Module):
-    @staticmethod
-    def rms_norm(tensor, norm_weights, norm_eps):
-        print(norm_weights.shape)
-        return (
-            tensor * torch.rsqrt(tensor.pow(2).mean(-1, keepdim=True) + norm_eps)
-        ) * norm_weights
-
-    def __init__(self, base_path: str):
-        super().__init__()
-        self.tokenizer = LlamaTokenizer(base_path + "tokenizer.model")
-        self.model, self.config = Llama.load_model_and_config(base_path)
-        self.freqs_cis = Llama.calculate_rope_frequencies(self.config)
-
-    def forward(self, tokens: torch.Tensor):
-        token_embeddings_unnormalized = self.initialize_embeddings(tokens)
-        final_embedding = self.perform_attention_and_feedforward(
-            token_embeddings_unnormalized,
-        )
-
-        next_token = self.generate_next_token(final_embedding)
-        return next_token
-
-    @staticmethod
-    def load_model_and_config(path):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = torch.load(path + "consolidated.00.pth", map_location=device)
-        with open(path + "params.json", "r") as f:
-            dic = json.load(f)
-            head_dim = dic["dim"] // dic["n_heads"]
-            max_seq_len = 2048
-            config = LlamaConfig(**dic, head_dim=head_dim, max_seq_len=max_seq_len)
-        return model, config
-
-    def initialize_embeddings(self, tokens):
-        vocab_size = self.config.vocab_size
-        embedding_layer = torch.nn.Embedding(vocab_size, self.config.dim)
-        embedding_layer.weight.data.copy_(self.model["tok_embeddings.weight"])
-        token_embeddings_unnormalized = embedding_layer(tokens).to(torch.bfloat16)
-        return token_embeddings_unnormalized
-
-    @staticmethod
-    def calculate_rope_frequencies(config):
+    def calculate_rope_frequencies(self):
         freqs = 1.0 / (
-            config.rope_theta
+            self.rope_theta
             ** (
-                torch.arange(0, config.head_dim, 2)[: (config.head_dim // 2)].float()
-                / config.head_dim
+                torch.arange(0, self.head_dim, 2)[: (self.head_dim // 2)].float()
+                / self.head_dim
             )
         )
-        t = torch.arange(config.max_seq_len, dtype=torch.float)
+        t = torch.arange(self.max_seq_len, dtype=torch.float)
         freqs = torch.outer(t, freqs)
         freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
         return freqs_cis
 
-    def perform_attention_and_feedforward(self, token_embeddings):
-        n_layers = self.config.n_layers
-        n_heads = self.config.n_heads
-        n_kv_heads = self.config.n_kv_heads
-        norm_eps = self.config.norm_eps
-        model = self.model
-
-        final_embedding = token_embeddings
-        for layer in range(n_layers):
-            qkv_attention_store = []
-            layer_embedding_norm = Llama.rms_norm(
-                final_embedding,
-                model[f"layers.{layer}.attention_norm.weight"],
-                norm_eps,
-            )
-            q_layer = model[f"layers.{layer}.attention.wq.weight"].view(
-                n_heads, -1, layer_embedding_norm.size(-1)
-            )
-            k_layer = model[f"layers.{layer}.attention.wk.weight"].view(
-                n_kv_heads, -1, layer_embedding_norm.size(-1)
-            )
-            v_layer = model[f"layers.{layer}.attention.wv.weight"].view(
-                n_kv_heads, -1, layer_embedding_norm.size(-1)
-            )
-            w_layer = model[f"layers.{layer}.attention.wo.weight"]
-
-            for head in range(n_heads):
-                q = q_layer[head]
-                k = k_layer[head // (n_heads // n_kv_heads)]
-                v = v_layer[head // (n_heads // n_kv_heads)]
-                q_per_token = torch.matmul(layer_embedding_norm, q.T)
-                k_per_token = torch.matmul(layer_embedding_norm, k.T)
-                v_per_token = torch.matmul(layer_embedding_norm, v.T)
-                q_rotated = self.apply_rope(q_per_token)
-                k_rotated = self.apply_rope(k_per_token)
-                qk = Llama.compute_qk_attention(q_rotated, k_rotated)
-                qk_masked = Llama.apply_attention_mask(qk, token_embeddings.size(0))
-                attention_weights = torch.nn.functional.softmax(qk_masked, dim=1).to(
-                    torch.bfloat16
-                )
-                qkv_attention = torch.matmul(attention_weights, v_per_token)
-                qkv_attention_store.append(qkv_attention)
-
-            stacked_qkv_attention = torch.cat(qkv_attention_store, dim=-1)
-            embedding_delta = torch.matmul(stacked_qkv_attention, w_layer.T)
-            final_embedding = self.update_embedding(
-                final_embedding, embedding_delta, layer
-            )
-
-        return final_embedding
-
-    def apply_rope(self, q_or_k):
+    def forward(self, q_or_k):
         q_split = q_or_k.float().view(q_or_k.size(0), -1, 2)
         q_complex = torch.view_as_complex(q_split)
         q_rotated_complex = q_complex * self.freqs_cis[: q_or_k.size(0)]
         q_rotated = torch.view_as_real(q_rotated_complex).view(q_or_k.size())
         return q_rotated
+
+    def load_weights(self, model, layer):
+        pass
+
+class Attention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        inner_dim = config.dim // config.n_heads
+        self.n_heads = config.n_heads
+        self.n_kv_heads = config.n_kv_heads
+        self.wq = nn.Parameter(torch.ones(config.n_heads, inner_dim, config.dim))
+        self.wk = nn.Parameter(torch.ones(config.n_kv_heads, inner_dim, config.dim))
+        self.wv = nn.Parameter(torch.ones(config.n_kv_heads, inner_dim, config.dim))
+
+    def forward(self, x, head):
+        q = self.wq[head]
+        k = self.wk[head // (self.n_heads // self.n_kv_heads)]
+        v = self.wv[head // (self.n_heads // self.n_kv_heads)]
+        q_per_token = torch.matmul(x, q.T)
+        k_per_token = torch.matmul(x, k.T)
+        v_per_token = torch.matmul(x, v.T)
+        return q_per_token, k_per_token, v_per_token
+
+    def forward_all(self, x):
+        qkv_store = []
+        for head in range(self.n_heads):
+            qkv_store.append(self.forward_head(x, head))
+        return qkv_store
+
+    def load_weights(self, model, layer):
+        self.wq.data.copy_(model[f"layers.{layer}.attention.wq.weight"].view(self.wq.size()))
+        self.wk.data.copy_(model[f"layers.{layer}.attention.wk.weight"].view(self.wk.size()))
+        self.wv.data.copy_(model[f"layers.{layer}.attention.wv.weight"].view(self.wv.size()))
+
+class Transformer(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.n_heads = config.n_heads
+        self.rms = RMSNorm(config.norm_eps)
+        self.rope = RotaryEmbedding(config.rope_theta, config.head_dim, config.max_seq_len)
+        self.attention = Attention(config)
+        self.ff = FeedForward(config)
+
+    def forward(self, x):
+        qkv_attention_store = []
+        layer_embedding_norm = self.rms(x)
+        for head in range(self.n_heads):
+            qt, kt, vt = self.attention(layer_embedding_norm, head)
+            q_rotated = self.rope(qt)
+            k_rotated = self.rope(kt)
+            qk = Transformer.compute_qk_attention(q_rotated, k_rotated)
+            qk_masked = Transformer.apply_attention_mask(qk, x.size(0))
+            attention_weights = torch.nn.functional.softmax(qk_masked, dim=1)#.to(torch.bfloat16)
+            qkv_attention = torch.matmul(attention_weights, vt)
+            qkv_attention_store.append(qkv_attention)
+
+        stacked_qkv_attention = torch.cat(qkv_attention_store, dim=-1)
+        return self.ff(stacked_qkv_attention, x)
 
     @staticmethod
     def compute_qk_attention(q_rotated, k_rotated):
@@ -206,38 +187,98 @@ class Llama(nn.Module):
         mask = torch.triu(mask, diagonal=1)
         return qk + mask
 
-    def update_embedding(self, final_embedding, embedding_delta, layer):
+    def load_weights(self, model, layer):
+        self.rms.load_weights(model, f"layers.{layer}.attention_norm.weight")
+        self.rope.load_weights(model, layer)
+        self.attention.load_weights(model, layer)
+        self.ff.load_weights(model, layer)
+
+class FeedForward(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.rms = RMSNorm(config.norm_eps)
+        hidden_dim = 4 * config.dim
+        self.w0 = nn.Parameter(torch.ones(config.dim, config.dim))
+        self.w1 = nn.Parameter(torch.ones(hidden_dim, config.dim))
+        self.w2 = nn.Parameter(torch.ones(config.dim, hidden_dim))
+        self.w3 = nn.Parameter(torch.ones(hidden_dim, config.dim))
+
+    def forward(self, x, final_embedding):
+        embedding_delta = torch.matmul(x, self.w0.T)
         embedding_after_edit = final_embedding + embedding_delta
-        embedding_after_norm = Llama.rms_norm(
-            embedding_after_edit,
-            self.model[f"layers.{layer}.ffn_norm.weight"],
-            self.config.norm_eps,
-        )
-        w1, w2, w3 = (
-            self.model[f"layers.{layer}.feed_forward.w{i}.weight"] for i in (1, 2, 3)
-        )
+        embedding_after_norm = self.rms(embedding_after_edit)
+
         feedforward_output = torch.matmul(
-            torch.functional.F.silu(torch.matmul(embedding_after_norm, w1.T))
-            * torch.matmul(embedding_after_norm, w3.T),
-            w2.T,
+            torch.functional.F.silu(torch.matmul(embedding_after_norm, self.w1.T))
+            * torch.matmul(embedding_after_norm, self.w3.T),
+            self.w2.T,
         )
         return embedding_after_edit + feedforward_output
 
-    def generate_next_token(self, final_embedding):
-        logits = torch.matmul(final_embedding[-1], self.model["output.weight"].T)
+    def load_weights(self, model, layer):
+        self.rms.load_weights(model, f"layers.{layer}.ffn_norm.weight")
+        self.w0.data.copy_(model[f"layers.{layer}.attention.wo.weight"])
+        self.w1.data.copy_(model[f"layers.{layer}.feed_forward.w1.weight"])
+        self.w2.data.copy_(model[f"layers.{layer}.feed_forward.w2.weight"])
+        self.w3.data.copy_(model[f"layers.{layer}.feed_forward.w3.weight"])
+
+class Llama(nn.Module):
+    def __init__(self, base_path: str):
+        super().__init__()
+        self.config = Llama.load_config(base_path)
+        self.layers = nn.ModuleList([Transformer(self.config) for _ in range(self.config.n_layers)])
+        self.embedding = Embedding(self.config.vocab_size, self.config.dim)
+        self.output_weight = nn.Parameter(torch.ones(self.config.vocab_size, self.config.dim))
+
+    @staticmethod
+    def load_model(path):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = torch.load(path + "consolidated.00.pth", map_location=device)
+        return model
+
+    @staticmethod
+    def load_config(path):
+        with open(path + "params.json", "r") as f:
+            dic = json.load(f)
+            head_dim = dic["dim"] // dic["n_heads"]
+            max_seq_len = 2048
+            config = LlamaConfig(**dic, head_dim=head_dim, max_seq_len=max_seq_len)
+        return config
+
+    def forward(self, tokens: torch.Tensor):
+        x = self.embedding(tokens)
+        for layer in self.layers:
+            x = layer(x)
+        logits = torch.matmul(x[-1], self.output_weight.T)
         next_token = torch.argmax(logits, dim=-1)
         return next_token
 
+    def load_weights(self, path):
+        model = Llama.load_model(path)
+        self.embedding.load_weights(model)
+        for layer in range(self.config.n_layers):
+            self.layers[layer].load_weights(model, layer)
+        self.output_weight.data.copy_(model["output.weight"])
 
 def main():
     PATH = "Llama3.2-1B/"
-    tokenizer = LlamaTokenizer(PATH + "tokenizer.model")
+    tokenizer = LlamaTokenizer(PATH)
     model = Llama(PATH)
+    model.load_weights(PATH)
     prompt = (
-        "the answer to the ultimate question of life, the universe, and everything is "
+        "quiero comer pizza de "
     )
     tokens = tokenizer.tokenize(prompt)
-    next_token = model(tokens)
+    #print(prompt, end="\n>")
+    a = time.time()
+    for i in range(100):
+
+        next_token = model(tokens)
+
+        #tokens = torch.cat([tokens, next_token.unsqueeze(-1)], dim=-1)
+        #print(tokenizer.decode([next_token.item()]), end = "")
+    b = time.time()
+    print(f"Time: {b - a}")
     print("RESULT:", tokenizer.decode([next_token.item()]))
 
 
