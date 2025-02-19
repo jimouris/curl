@@ -23,16 +23,16 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
     stopwords = {'ourselves', 'hers', 'between', 'yourself', 'but', 'again', 'there', 'about', 'once', 'during', 'out',
-                 'very', 'having', 'with', 'they', 'own', 'be', 'some', 'for', 'do', 'its', 'yours', 'such',
+                 'very', 'having', 'with', 'they', 'own', 'be', 'some', 'for', 'do', 'its', 'yours', 'such', 'a', 'an',
                  'into', 'of', 'most', 'itself', 'other', 'off', 'is', 's', 'am', 'or', 'who', 'as', 'from', 'him',
                  'each', 'the', 'themselves', 'until', 'below', 'are', 'we', 'these', 'your', 'his', 'through', 'don',
                  'nor', 'me', 'were', 'her', 'more', 'himself', 'this', 'down', 'should', 'our', 'their', 'while',
                  'above', 'both', 'up', 'to', 'ours', 'had', 'she', 'all', 'no', 'when', 'at', 'any', 'before', 'them',
-                 'same', 'and', 'been', 'have', 'will', 'on', 'does', 'yourselves', 'then', 'that', 'because',
+                 'same', 'and', 'been', 'have', 'will', 'on', 'does', 'yourselves', 'then', 'that', 'because', 'in',
                  'what', 'over', 'why', 'so', 'can', 'did', 'not', 'now', 'under', 'he', 'you', 'herself', 'has',
                  'just', 'where', 'too', 'only', 'myself', 'which', 'those', 'i', 'after', 'few', 'whom', 't', 'being',
                  'if', 'theirs', 'my', 'against',  'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
-                 ',', '.', '...', '?', '!', "'", "''", "", '?"', "?'", ',"', '."', "'s", ':', '"', '-', '�', '—', 'an', 'a', 'in'}
+                 ',', '.', '...', '?', '!', "'", "''", "", '?"', "?'", ',"', '."', "'s", ':', '"', '-', '�', '—'}
 
     model = GPT2LMHeadModel.from_pretrained(model_name)
     for name, param in model.named_parameters():
@@ -107,6 +107,7 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
 
     accuracy = correct_predictions / total_predictions
     print(f'LAMBADA Accuracy: {accuracy:.4f}')
+
 
 if __name__ == "__main__":
     evaluate_gpt2_on_lambada()

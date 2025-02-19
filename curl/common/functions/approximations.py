@@ -361,7 +361,7 @@ def permute_reveal_evaluate_share(self, func):
         The processed tensor with the function applied to each split.
     """
     size = self.size()
-    if func in ("softmax", "log_softmax"):
+    if func in ("layernorm", "softmax", "log_softmax"):
         result = self.flatten(0, -2) # leave the last dimension
     else:
         result = self.flatten()

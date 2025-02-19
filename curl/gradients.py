@@ -12,6 +12,7 @@ from functools import reduce
 import curl
 import torch
 
+from .common.functions.approximations import permute_reveal_evaluate_share
 from .common.util import _grad_input_padding
 
 
@@ -118,11 +119,13 @@ class AutogradContext(BaseAutogradContext):
         self.non_differentiable = []
 
     def save_for_backward(self, value):
-        self.context.append(value)
+        # self.context.append(value)
+        pass
 
     def save_multiple_for_backward(self, values):
-        for value in values:
-            self.save_for_backward(value)
+        # for value in values:
+        #     self.save_for_backward(value)
+        pass
 
     def mark_non_differentiable(self, non_differentiable):
         if not isinstance(non_differentiable, list):
@@ -1952,6 +1955,7 @@ class AutogradBatchNorm(AutogradFunction):
         # return gradients:
         return (grad_input, grad_weight, grad_bias)
 
+from curl.config import cfg
 
 @register_function("layernorm")
 class AutogradLayerNorm(AutogradFunction):
@@ -1983,27 +1987,29 @@ class AutogradLayerNorm(AutogradFunction):
 
         Returns: (weight * normalized input + bias) of shape `(N, C, +)`.
         """
+        if cfg.nn.gradients.layernorm == "fission":
+            x_norm = permute_reveal_evaluate_share(x, "layernorm")
+            inv_var = None
+        else:
+            # compute mean and variance, track batch statistics:
+            mean = x.mean(-1, keepdims=True)
+            variance = x.var(-1, keepdims=True)
 
-        # compute mean and variance, track batch statistics:
-        mean = x.mean(-1, keepdims=True)
-        variance = x.var(-1, keepdims=True)
+            if training or inv_var is None:
+                # compute inverse variance:
+                if torch.is_tensor(variance):
+                    inv_var = 1.0 / torch.sqrt(variance + eps)
+                else:
+                    inv_var = (variance + eps).inv_sqrt()
 
-        if training or inv_var is None:
-            # compute inverse variance:
-            if torch.is_tensor(variance):
-                inv_var = 1.0 / torch.sqrt(variance + eps)
-            else:
-                inv_var = (variance + eps).inv_sqrt()
+            # reshape shape (C) to broadcastable (1, C, 1, +):
+            # mean = mean.reshape(broadcast_shape)
+            inv_var = inv_var.reshape(mean.shape)
+            # weight = weight.reshape(broadcast_shape)
+            # bias = bias.reshape(broadcast_shape)
 
-        # reshape shape (C) to broadcastable (1, C, 1, +):
-        # mean = mean.reshape(broadcast_shape)
-        inv_var = inv_var.reshape(mean.shape)
-        # weight = weight.reshape(broadcast_shape)
-        # bias = bias.reshape(broadcast_shape)
-
-        # compute z-scores:
-        x_norm = (x - mean) * inv_var
-
+            # compute z-scores:
+            x_norm = (x - mean) * inv_var
         # save context and return:
         ctx.save_multiple_for_backward((x_norm, weight, inv_var, training))
         return x_norm * weight + bias

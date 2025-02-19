@@ -184,9 +184,17 @@ class EvaluatorServer:
                 # Reconstruct
                 tensor = sum(results)
                 tensor = tensor.float() / 2**precision
-                if function not in fission_operations:
+                if function == "layernorm":
+                    mean = tensor.mean(-1, keepdims=True)
+                    variance = tensor.var(-1, keepdims=True)
+                    inv_var = 1.0 / torch.sqrt(variance + 1e-05)
+                    inv_var = inv_var.reshape(mean.shape)
+                    # compute z-scores:
+                    result = (tensor - mean) * inv_var
+                elif function not in fission_operations:
                     raise ValueError(f"Unsupported function {function}")
-                result = fission_operations[function](tensor)
+                else:
+                    result = fission_operations[function](tensor)
 
                 # Secret share the result back to the MPC nodes.
                 result = (result * 2**cfg.encoder.precision_bits).long()
