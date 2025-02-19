@@ -85,6 +85,14 @@ def run_shuffle(cfg_file, device=None):
         curl.print("z_enc :", z_enc.encoder.precision_bits)
         curl.print("z :", z_enc.get_plain_text())
         curl.print("----")
+        # egk test
+        # x_enc = curl.cryptensor([4.6] * 100)
+        # y_enc = x_enc.egk_trunc_pr(62, 16)
+        # curl.print("y_enc :", y_enc)
+        # curl.print("y_enc :", y_enc.encoder.precision_bits)
+        # curl.print("y :", y_enc.get_plain_text())
+        # curl.print("----")
+
 
 def _run_experiment(args):
     # Only Rank 0 will display logs.

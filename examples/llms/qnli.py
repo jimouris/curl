@@ -11,6 +11,7 @@ import os
 import torch
 from math import ceil, log2
 from transformers import AutoTokenizer, BertForSequenceClassification
+import time
 
 import curl
 import curl.communicator as comm
@@ -54,7 +55,10 @@ def get_bert_model(path, encyrpted_model):
 def run_qnli_accuracy_test(model, curl_model, data, targets, total):
     count = 0
     count_enc = 0
-    for i, label in enumerate(range(total)):
+    print(f"{total=}")
+    start = 0
+    now = time.time()
+    for label in range(start, total):
         # Plaintext
         outputs = model(**data[label])
         result = outputs.logits
@@ -67,7 +71,7 @@ def run_qnli_accuracy_test(model, curl_model, data, targets, total):
         result_enc = outputs_enc.get_plain_text()
         print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
-        print(f"{i=}, {count/i=}, {count_enc/i=}")
+        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, {count/label=}, {count_enc/label=}")
     return count / total, count_enc / total
 
 

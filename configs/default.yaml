@@ -6,9 +6,7 @@ debug:
 encoder:
   precision_bits: 16
   trunc_method:
-    # prod: "crypten"
     prod: "egk"
-    # lut: "crypten"
     lut: "egk"
 functions:
   max:
