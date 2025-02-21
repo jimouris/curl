@@ -55,13 +55,15 @@ class LLMs:
     def __init__(self, model, tensor_size, device="cpu", full=True):
         from examples.llms.gpt import GPT2, GPTNeo
         from examples.llms.bert import BertTiny, BertBase, BertLarge
+        from examples.llms.llama import Llama1B
 
         all_models = {
             'gpt2': GPT2,
             'gptneo': GPTNeo,
             'berttiny': BertTiny,
             'bertbase': BertBase,
-            'bertlarge': BertLarge
+            'bertlarge': BertLarge,
+            'llama': Llama1B
         }
 
         self.device = torch.device(device)
