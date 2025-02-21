@@ -72,19 +72,19 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
         for candidate in predicted_token_ids:
             candidate = tokenizer.decode([candidate]).strip()
             print(f"{candidate=}")
-            if candidate.lower() not in stopwords:
-                predicted_word = candidate
+            if candidate.lower() not in stopwords or candidate.lower() == target_word.lower()[:len(candidate)]:
+                next_word = candidate
                 break
-        assert predicted_word is not None, "No candidate word found"
+        assert next_word is not None, "No candidate word found"
 
         with torch.no_grad():
-            next_word = predicted_word
             predicted_word = ""
+            context += ' '
             for i in range(10):
-                if predicted_word.lower() == target_word.lower():
-                    break
                 predicted_word += next_word
-                context += ' ' + next_word
+                context += next_word
+                if predicted_word.lower() == target_word.lower() or predicted_word.lower() != target_word.lower()[:len(predicted_word)]:
+                    break
                 input_ids = tokenizer(context, return_tensors='pt')['input_ids']
                 outputs = model(input_ids)
                 predictions = outputs.logits

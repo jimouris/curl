@@ -10,7 +10,6 @@ import warnings
 from collections import OrderedDict
 
 import curl
-import math
 import torch
 import torch.onnx.symbolic_helper as sym_help
 from curl.common.functions.pooling import _adaptive_pool2d_helper
@@ -2010,9 +2009,9 @@ class Attention(Module):
         self.search_dim = embed_dim // num_heads
 
         self.c_attn = AttentionLinear(embed_dim, 3 * embed_dim)
-        self.c_proj = Linear(embed_dim, embed_dim)
+        self.c_proj = AttentionLinear(embed_dim, embed_dim)
 
-    def forward(self, x):
+    def forward(self, x, mask=True):
         batch_size = x.shape[0]
         seq_len = x.shape[1]
 
@@ -2021,7 +2020,10 @@ class Attention(Module):
         key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
         value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
 
-        attn = query.matmul(key) / math.sqrt(query.size(-1))
+        attn = query.matmul(key) / query.size(-1) ** 0.5
+        if mask:
+            attn.share = attn.share * torch.tril(torch.ones_like(attn.share, dtype=torch.long), diagonal=0)
+            attn.share = attn.share + -2**62 * torch.triu(torch.ones_like(attn.share, dtype=torch.long), diagonal=1)
         attn = attn.softmax(dim=-1)
 
         y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)

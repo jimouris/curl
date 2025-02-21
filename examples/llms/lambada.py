@@ -67,7 +67,7 @@ def get_predictions(tokenizer, predictions):
     _, predicted_token_ids = torch.topk(predictions[0, -1, :], k=128)
     for candidate in predicted_token_ids:
         candidate = tokenizer.decode([candidate]).strip()
-        if candidate.lower() not in stopwords:
+        if candidate.lower() not in stopwords or candidate.lower() == target_word.lower()[:len(candidate)]:
             predicted_word = candidate
             break
     assert predicted_word is not None, "No candidate word found"
@@ -108,15 +108,15 @@ def evaluate_gpt2_on_lambada(tokenizer, model, curl_model, data="tsv"):
         curl_predictions = curl_outputs.get_plain_text()
 
         # Get the predicted token
-        predicted_word = get_predictions(tokenizer, predictions)
+        next_word = get_predictions(tokenizer, predictions)
         with torch.no_grad():
-            next_word = predicted_word
             predicted_word = ""
+            context += ' '
             for i in range(10):
-                if predicted_word.lower() == target_word.lower():
-                    break
                 predicted_word += next_word
-                context += ' ' + next_word
+                context += next_word
+                if predicted_word.lower() == target_word.lower() or predicted_word.lower() != target_word.lower()[:len(predicted_word)]:
+                    break
                 input_ids = tokenizer(context, return_tensors='pt')['input_ids']
                 outputs = model(input_ids)
                 predictions = outputs.logits
@@ -128,11 +128,12 @@ def evaluate_gpt2_on_lambada(tokenizer, model, curl_model, data="tsv"):
 
         next_word = get_predictions(tokenizer, curl_predictions)
         predicted_word = ""
+        context += ' '
         for i in range(10):
-            if predicted_word.lower() == target_word.lower():
-                break
             predicted_word += next_word
-            context += ' ' + next_word
+            context += next_word
+            if predicted_word.lower() == target_word.lower() or predicted_word.lower() != target_word.lower()[:len(predicted_word)]:
+                break
             input_ids = tokenizer(context, return_tensors='pt')['input_ids']
             outputs = curl_model(curl.cryptensor(input_ids, precision=0))
             predictions = outputs.get_plain_text()
