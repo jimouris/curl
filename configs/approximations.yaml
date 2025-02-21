@@ -109,3 +109,5 @@ nn:
     protocol: "layer_estimation"
     skip_loss_forward: True
     cache_pred_size: True
+  gradients:
+    layernorm: "normal"

@@ -124,7 +124,8 @@ class Module:
         """
         if name in self._parameters or hasattr(self, name):
             raise ValueError("Parameter or field %s already exists." % name)
-        param.requires_grad = requires_grad
+        if requires_grad:
+            param.requires_grad = requires_grad
         self._parameters[name] = param
         setattr(self, name, param)
 
@@ -1965,6 +1966,39 @@ class MatMul(Module):
         return MatMul()
 
 
+class AttentionLinear(Module):
+    """
+    Module that performs linear transformation.
+    Applies a linear transformation to the incoming data: :math:`y = xA^T + b`
+
+    Args:
+        in_features: size of each input sample
+        out_features: size of each output sample
+        bias: If set to ``False``, the layer will not learn an additive bias.
+            Default: ``True``
+
+    Shape:
+        - Input: :math:`(N, *, H_{in})` where :math:`*` means any number of
+          additional dimensions and :math:`H_{in} = \text{in\_features}`
+        - Output: :math:`(N, *, H_{out})` where all but the last dimension
+          are the same shape as the input and :math:`H_{out} = \text{out\_features}`.
+    """  # noqa: W605
+
+    def __init__(self, in_features, out_features, bias=True):
+        super().__init__()
+
+        # initialize model parameters:
+        pytorch_module = torch.nn.Linear(in_features, out_features, bias=bias)
+        self.register_parameter("weight", pytorch_module.weight.t(), requires_grad=False)
+        if bias:
+            self.register_parameter("bias", pytorch_module.bias)
+
+    def forward(self, x):
+        output = x.matmul(self.weight)
+        if hasattr(self, "bias"):
+            output = output.add(self.bias)
+        return output
+
 class Attention(Module):
     def __init__(self, embed_dim, num_heads):
         super(Attention, self).__init__()
@@ -1975,14 +2009,14 @@ class Attention(Module):
         self.num_heads = num_heads
         self.search_dim = embed_dim // num_heads
 
-        self.search = Linear(embed_dim, 3 * embed_dim)
-        self.proj = Linear(embed_dim, embed_dim)
+        self.c_attn = AttentionLinear(embed_dim, 3 * embed_dim)
+        self.c_proj = Linear(embed_dim, embed_dim)
 
     def forward(self, x):
         batch_size = x.shape[0]
         seq_len = x.shape[1]
 
-        query, key, value = self.search(x).split(self.embed_dim, dim=2)
+        query, key, value = self.c_attn(x).split(self.embed_dim, dim=2)
         query = query.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
         key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
         value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
@@ -1991,7 +2025,7 @@ class Attention(Module):
         attn = attn.softmax(dim=-1)
 
         y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
-        y = self.proj(y)
+        y = self.c_proj(y)
         return y
 
 

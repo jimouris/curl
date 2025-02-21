@@ -37,7 +37,7 @@ functions:
 mpc:
   active_security: False
   provider: "TTP"
-  protocol: "beaver"
+  protocol: "plaintext"
 nn:
   dpsmpc:
     protocol: "layer_estimation"
