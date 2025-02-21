@@ -61,7 +61,7 @@ class DistributedCommunicator(Communicator):
             if total_ws > 1:
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
             self.main_group = dist.new_group(list(range(self.world_size)))
-            self.eval_group = dist.new_group(list(range(self.world_size)) + list(range(total_ws, total_ws + self.evaluator_size)))
+            self.eval_groups = [[dist.new_group([i, j]) for j in range(total_ws, total_ws + self.evaluator_size)] for i in range(self.world_size)]
             self.eval_comm_group = dist.new_group([0] + list(range(total_ws, total_ws + self.evaluator_size)))
             self.ttp_initialized = init_ttp
 

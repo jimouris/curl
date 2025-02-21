@@ -34,7 +34,7 @@ class MultiProcessLauncher:
         # Using multiple GPUs
         if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
             assert (
-                fn_args.world_size < torch.cuda.device_count()
+                fn_args.world_size <= torch.cuda.device_count()
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
 
         self.processes = []
@@ -59,10 +59,15 @@ class MultiProcessLauncher:
 
         if curl.mpc.ttp_required():
             if 'multi_gpu' in fn_args and fn_args.multi_gpu:
-                ttp_device = torch.device(f"cuda:{world_size}")
+                if fn_args.world_size < torch.cuda.device_count():
+                    ttp_device = torch.device(f"cuda:{world_size}")
+                else:
+                    ttp_device = torch.device(f"cuda:0")
+                    # ttp_device = torch.device(f"cpu")
             else:
                 ttp_device = device
 
+            print(f'Running party {world_size} in {ttp_device}')
             self.ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name="TTP",
@@ -83,7 +88,7 @@ class MultiProcessLauncher:
             if self.ttp_process:
                 evaluator_rank += 1
             if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
-                device = torch.device(f"cuda:{evaluator_rank}")
+                device = torch.device(f"cpu")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
                 print(f'Running party {evaluator_rank} in {device}')

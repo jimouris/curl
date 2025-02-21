@@ -40,7 +40,7 @@ class EvaluatorClient:
         def __init__(self):
             # Initialize connection
             communicator = comm.get()
-            self.eval_group = communicator.eval_group
+            self.eval_groups = communicator.eval_groups
             self.eval_comm_group = communicator.eval_comm_group
             logging.info(f"[Party {communicator.get_rank()}] Evaluator Client initialized")
 
@@ -48,6 +48,7 @@ class EvaluatorClient:
             communicator = comm.get()
             world_size = communicator.get_world_size()
             evaluators_size = communicator.get_evaluators_size()  # Number of processes
+            mpc_party_rank = communicator.get_rank()
             assert (
                 communicator.get_rank() < world_size
             ), "Only MPC parties communicate with the EvaluatorServers"
@@ -56,8 +57,7 @@ class EvaluatorClient:
 
             # Scatter: Divide data into chunks for workers
             chunks = tensor.chunk(evaluators_size)
-
-            if communicator.get_rank() == 0:
+            if mpc_party_rank == 0:
                 message = {
                     "function": func_name,
                     "precision": tensor.encoder.precision_bits,
@@ -66,26 +66,19 @@ class EvaluatorClient:
                     evaluator_rank = world_size + i
                     message["tensor_size"] = chunks[i].size()
                     communicator.send_obj(message, evaluator_rank, self.eval_comm_group)
-                    logging.debug(f"Sent to Evaluator [{evaluator_rank}]")
 
             # Process each split asynchronously
-            requests = [None] * evaluators_size
             for i in range(evaluators_size):
                 evaluator_rank = world_size + i
-                requests[i] = communicator.isend(chunks[i].share, evaluator_rank, self.eval_group)
-            # Wait for all async requests to complete and retrieve messages
-            for req in requests:
-                req.wait()
+                logging.debug(f"[Party {mpc_party_rank}] Sending chunk to Evaluator [{evaluator_rank}]. Group: [{mpc_party_rank}][{i}]")
+                communicator.broadcast(chunks[i].share, mpc_party_rank, self.eval_groups[mpc_party_rank][i])
 
             # Initialize local results with the correct split sizes
-            results = [torch.empty_like(chunks[i]._tensor.share) for i in range(evaluators_size)]
-            requests = [None] * evaluators_size
+            results = [torch.empty_like(chunks[i]._tensor.share, device=tensor.device) for i in range(evaluators_size)]
             for i in range(evaluators_size):
                 evaluator_rank = world_size + i
-                requests[i] = communicator.irecv(results[i], evaluator_rank, self.eval_group)
-            # Wait for all async requests to complete and retrieve messages
-            for req in requests:
-                req.wait()
+                logging.debug(f"[Party {mpc_party_rank}] Receiving from Evaluator [{evaluator_rank}]")
+                communicator.broadcast(results[i], evaluator_rank, self.eval_groups[mpc_party_rank][i])
 
             tensor.share = torch_cat(results)
             tensor.encoder._precision_bits = cfg.encoder.precision_bits
@@ -119,26 +112,28 @@ class EvaluatorServer:
         """Initializes an Evaluator server that receives requests"""
         self.generator = torch.Generator()
         self.cfg_file = curl.cfg.get_default_config_path()
-        rank = comm.get().get_rank()
+        evaluator_rank = comm.get().get_rank()
 
         # Initialize connection
-        logging.info(f"[Evaluator {rank}]: Initializing...")
-
+        logging.info(f"[Evaluator {evaluator_rank}]: Initializing...")
         env_vars = {}
         for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
             if key.upper() not in os.environ:
                 raise ValueError("Environment variable %s must be set." % key)
             env_vars[key.lower()] = os.environ[key.upper()]
         communicator = comm.get()
-        self.eval_group = communicator.eval_group
+        self.eval_groups = communicator.eval_groups
 
         # Determine device
         # if torch.cuda.is_available():
         # else:
         self.device = "cpu"
-        logging.info(f"[Evaluator {rank}] Initialized with device: {self.device}")
+        logging.info(f"[Evaluator {evaluator_rank}] Initialized with device: {self.device}")
         evaluator_rank = communicator.get_rank()
         world_size = communicator.get_world_size()
+        ttp = 0
+        if communicator.ttp_initialized:
+            ttp = 1
 
         # Operations supported by Fission
         fission_operations = {
@@ -166,7 +161,7 @@ class EvaluatorServer:
                 logging.debug(f"Evaluator [{evaluator_rank}] Message received: %s" % message)
 
                 if message == "terminate":
-                    logging.info("Evaluator Server {evaluator_rank - world_size - 1} shutting down.")
+                    logging.info(f"Evaluator Server {evaluator_rank - world_size} shutting down.")
                     exit()
                 function = str(message["function"])
                 precision = message["precision"]
@@ -174,12 +169,10 @@ class EvaluatorServer:
 
                 # Receive data from all the MPC nodes
                 results = [torch.empty(tensor_size, dtype=torch.long) for _ in range(world_size)]
-                requests = [None] * world_size
                 for mpc_node in range(world_size):
-                    requests[mpc_node] = communicator.irecv(results[mpc_node], mpc_node, self.eval_group)
-                # Wait for all async requests to complete and retrieve messages
-                for req in requests:
-                    req.wait()
+                    # requests[mpc_node] = communicator.irecv(results[mpc_node], mpc_node, self.eval_group)
+                    logging.debug(f"Evaluator Server {evaluator_rank - world_size - 1} receiving from MPC party {mpc_node}. Group: [{mpc_node}][{evaluator_rank-world_size-ttp}]")
+                    communicator.broadcast(results[mpc_node], mpc_node, self.eval_groups[mpc_node][evaluator_rank-world_size-ttp])
 
                 # Reconstruct
                 tensor = sum(results)
@@ -191,23 +184,20 @@ class EvaluatorServer:
                     inv_var = inv_var.reshape(mean.shape)
                     # compute z-scores:
                     result = (tensor - mean) * inv_var
-                elif function not in fission_operations:
-                    raise ValueError(f"Unsupported function {function}")
-                else:
+                elif function in fission_operations:
                     result = fission_operations[function](tensor)
+                else:
+                    raise ValueError(f"Unsupported function {function}")
 
                 # Secret share the result back to the MPC nodes.
                 result = (result * 2**cfg.encoder.precision_bits).long()
-                requests = [None] * world_size
                 for mpc_node in range(1, world_size):
                     share = generate_random_ring_element(result.size(), generator=self.generator)
-                    requests[mpc_node] = communicator.isend(share, mpc_node, self.eval_group)
+                    communicator.broadcast(share, evaluator_rank, self.eval_groups[mpc_node][evaluator_rank-world_size-ttp])
                     result -= share
                 # Send the last share to MPC party 0.
-                requests[0] = communicator.isend(result, 0, self.eval_group)
-                # Wait for all async requests to complete and retrieve messages
-                for req in requests:
-                    req.wait()
+                communicator.broadcast(result, evaluator_rank, self.eval_groups[0][evaluator_rank-world_size-ttp])
+
         except RuntimeError as err:
             logging.info("Encountered Runtime error. Evaluator Server shutting down:")
             logging.info(f"{err}")
