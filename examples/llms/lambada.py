@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-python examples/llms/lambada.py --world_size 2 --model BertBase
+python examples/llms/lambada.py --multiprocess
 """
 
 import argparse
@@ -9,7 +9,6 @@ import codecs
 import logging
 import os
 import torch
-import time
 
 from datasets import load_dataset, load_from_disk
 from math import ceil, log2
@@ -20,7 +19,6 @@ import curl
 import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.gpt2 import GPT2
 
 
 def load_tsv(data_file):
@@ -33,25 +31,49 @@ def load_tsv(data_file):
             sentences.append(row)
     return sentences
 
-def get_gpt_model(path, encyrpted_model):
+def load_data(mode):
+    # Load the LAMBADA dataset
+    match mode:
+        case "cimec":
+            dataset = load_dataset('cimec/lambada', split='test')
+        case "tsv":
+            dataset = load_tsv('examples/llms/glue_data/lambada_test.jsonl')
+        case "disk":
+            dataset = load_from_disk('examples/llms/glue_data/lambada_test.jsonl')
+        case _:
+            raise NotImplementedError
+    return dataset
+
+def get_gpt_model(path, mode):
+    # Load pre-trained GPT-2 tokenizer and model
+    tokenizer = GPT2Tokenizer.from_pretrained(path)
     model = GPT2LMHeadModel.from_pretrained(path)
     model.eval()
 
-    curl_model = encyrpted_model()
+    match mode:
+        case "Clear":
+            from examples.llms.gpt_clear import GPT2LMHead
+        case "Fixed":
+            from examples.llms.gpt_fixed import GPT2LMHead
+        case "Secret":
+            from examples.llms.gpt_curl import GPT2LMHead
+        case _:
+            raise NotImplementedError
+
+    curl_model = GPT2LMHead()
     curl_model.load_state_dict(model.state_dict())
 
-    # Increase the vocabulary size to the next power of two.
-    # This is used for correctness in the 'evaluate_embed' function.
-    weight = curl_model.transformer.wte.weight
-    new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
-    append = torch.zeros(new_size, weight.size()[1])
-    curl_model.transformer.wte.weight = torch.cat((weight, append))
+    if mode == "Secret":
+        # Increase the vocabulary size to the next power of two.
+        # This is used for correctness in the 'evaluate_embed' function.
+        weight = curl_model.transformer.wte.weight
+        new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
+        append = torch.zeros(new_size, weight.size()[1])
+        curl_model.transformer.wte.weight = torch.cat((weight, append))
+        curl_model.encrypt(src=0)
+    return tokenizer, model, curl_model
 
-    curl_model.encrypt(src=0)
-    tokenizer = GPT2Tokenizer.from_pretrained(path)
-    return curl_model, tokenizer, model
-
-def get_predictions(tokenizer, predictions):
+def get_predictions(tokenizer, predictions, target_word):
     stopwords = {'ourselves', 'hers', 'between', 'yourself', 'but', 'again', 'there', 'about', 'once', 'during', 'out',
                  'very', 'having', 'with', 'they', 'own', 'be', 'some', 'for', 'do', 'its', 'yours', 'such', 'a', 'an',
                  'into', 'of', 'most', 'itself', 'other', 'off', 'is', 's', 'am', 'or', 'who', 'as', 'from', 'him',
@@ -64,25 +86,22 @@ def get_predictions(tokenizer, predictions):
                  'if', 'theirs', 'my', 'against',  'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
                  ',', '.', '...', '?', '!', "'", "''", "", '?"', "?'", ',"', '."', "'s", ':', '"', '-', '�', '—'}
 
+    # Get the predicted token
     _, predicted_token_ids = torch.topk(predictions[0, -1, :], k=128)
+    predicted_word = None
     for candidate in predicted_token_ids:
         candidate = tokenizer.decode([candidate]).strip()
-        if candidate.lower() not in stopwords or candidate.lower() == target_word.lower()[:len(candidate)]:
+        if candidate.lower() not in stopwords:
             predicted_word = candidate
             break
     assert predicted_word is not None, "No candidate word found"
-    return predicted_word
 
-def evaluate_gpt2_on_lambada(tokenizer, model, curl_model, data="tsv"):
-    # Load pre-trained GPT-2 tokenizer and model
-    # Load the LAMBADA dataset
-    if data == "cimec":
-        dataset = load_dataset('cimec/lambada', split='test')
-    elif data == "tsv":
-        dataset = load_tsv('examples/llms/glue_data/lambada_test.jsonl')
-    else:
-        dataset = load_from_disk('examples/llms/glue_data/lambada_test.jsonl')
-    print('LAMBADA loaded')
+    # Compare with the actual last word
+    return predicted_word.lower() == target_word.lower()
+
+def evaluate_lambada(mode, data="tsv"):
+    tokenizer, model, curl_model = get_gpt_model("gpt2", mode)
+    dataset = load_data(data)
 
     correct_predictions = 0
     curl_correct_predictions = 0
@@ -90,8 +109,9 @@ def evaluate_gpt2_on_lambada(tokenizer, model, curl_model, data="tsv"):
 
     for example in tqdm(dataset):
         total_predictions += 1
-        text = example['text']
+
         # Split the text into context and target (last word)
+        text = example['text']
         *context, target_word = text.split()
         context = ' '.join(context)
 
@@ -103,68 +123,36 @@ def evaluate_gpt2_on_lambada(tokenizer, model, curl_model, data="tsv"):
         with torch.no_grad():
             outputs = model(input_ids)
             predictions = outputs.logits
+        correct_predictions += get_predictions(tokenizer, predictions, target_word)
 
-        curl_outputs = curl_model(curl.cryptensor(input_ids, precision=0))
-        curl_predictions = curl_outputs.get_plain_text()
+        if mode == "Secret":
+            curl_outputs = curl_model(curl.cryptensor(input_ids, precision=0))
+            curl_predictions = curl_outputs.get_plain_text()
+        else:
+            curl_predictions = curl_model(input_ids)
+        curl_correct_predictions += get_predictions(tokenizer, curl_predictions, target_word)
 
-        # Get the predicted token
-        next_word = get_predictions(tokenizer, predictions)
-        with torch.no_grad():
-            predicted_word = ""
-            context += ' '
-            for i in range(10):
-                predicted_word += next_word
-                context += next_word
-                if predicted_word.lower() == target_word.lower() or predicted_word.lower() != target_word.lower()[:len(predicted_word)]:
-                    break
-                input_ids = tokenizer(context, return_tensors='pt')['input_ids']
-                outputs = model(input_ids)
-                predictions = outputs.logits
-                next_word = tokenizer.decode([torch.argmax(predictions[0, -1, :])]).strip()
-
-        # Compare with the actual last word
-        if predicted_word.lower() == target_word.lower():
-            correct_predictions += 1
-
-        next_word = get_predictions(tokenizer, curl_predictions)
-        predicted_word = ""
-        context += ' '
-        for i in range(10):
-            predicted_word += next_word
-            context += next_word
-            if predicted_word.lower() == target_word.lower() or predicted_word.lower() != target_word.lower()[:len(predicted_word)]:
-                break
-            input_ids = tokenizer(context, return_tensors='pt')['input_ids']
-            outputs = curl_model(curl.cryptensor(input_ids, precision=0))
-            predictions = outputs.get_plain_text()
-            next_word = tokenizer.decode([torch.argmax(predictions[0, -1, :])]).strip()
-
-        if predicted_word.lower() == target_word.lower():
-            curl_correct_predictions += 1
-
-        print(f'LAMBADA Torch Accuracy: {correct_predictions / total_predictions:.4f}')
-        print(f'LAMBADA Curl  Accuracy: {curl_correct_predictions / total_predictions:.4f}')
+        print(f'LAMBADA Torch Accuracy: {correct_predictions / total_predictions:.4f} ({correct_predictions})')
+        print(f'LAMBADA Curl  Accuracy: {curl_correct_predictions / total_predictions:.4f} ({curl_correct_predictions})')
 
     accuracy = correct_predictions / total_predictions
-    print(f'LAMBADA Accuracy: {accuracy:.4f}')
+    curl_accuracy = curl_correct_predictions / total_predictions
     return accuracy, curl_accuracy
 
 
-def run_lambada(cfg_file, model, count=100, communication=False, device=None):
+def run_lambada(cfg_file, communication=False, device=None, mode="Clear", data="tsv"):
     # First cold run.
-    curl.init(cfg_file, device=device)
-    if communication:
-        comm.get().set_verbosity(True)
+    if mode == "Secret":
+        curl.init(cfg_file, device=device)
+        if communication:
+            comm.get().set_verbosity(True)
 
-    if model == "GPT2":
-        curl_model, tokenizer, model = get_gpt_model("gpt2", GPT2)
-        print('GPT2 loaded')
+    base_accuracy, curl_accuracy = evaluate_lambada(mode, data)
 
-    base_accuracy, curl_accuracy = evaluate_gpt2_on_lambada(tokenizer, model, curl_model)
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
-    if communication:
+    if mode == "Secret" and communication:
         comm.get().print_communication_stats()
         exit(0)
 
@@ -208,20 +196,6 @@ def get_args():
         action="store_true",
         help="Print communication statistics",
     )
-    models = ['GPT2']
-    parser.add_argument(
-        "--model",
-        choices=models,
-        required=True,
-        help="Choose a model to run from the following options: {}".format(models),
-    )
-    parser.add_argument(
-        "--count",
-        "-c",
-        type=int,
-        default=-1,
-        help="The number of samples to iterate over. -1 for entire dataset",
-    )
     parser.add_argument(
         "--device",
         "-d",
@@ -236,6 +210,21 @@ def get_args():
         default=False,
         action="store_true",
         help="use different gpu for each party. Will override --device if selected",
+    )
+    models=["Clear", "Fixed", "Secret"]
+    parser.add_argument(
+        "--model",
+        choices=models,
+        required=True,
+        help="Choose a model to run from the following options: {}".format(models),
+    )
+    data=["cimec", "tsv", "disk"]
+    parser.add_argument(
+        "--data",
+        choices=data,
+        required=False,
+        default="tsv",
+        help="Choose a data format from the following options: {}".format(data),
     )
     args = parser.parse_args()
     return args
@@ -263,7 +252,7 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_lambada(cfg_file, args.model, args.count, args.communication, args.device)
+    run_lambada(cfg_file, args.communication, args.device, args.model, args.data)
 
     print('Done')
 

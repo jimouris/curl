@@ -45,9 +45,9 @@ class MultiProcessLauncher:
                 device = torch.device(f"cuda:{rank}")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
-                print(f'Running party {rank} in {device}')
             else:
                 new_args = fn_args
+            print(f'Running party {rank} in {device}')
 
             process_name = "process " + str(rank)
             process = multiprocessing.Process(
@@ -91,9 +91,9 @@ class MultiProcessLauncher:
                 device = torch.device(f"cpu")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
-                print(f'Running party {evaluator_rank} in {device}')
             else:
                 new_args = fn_args
+            print(f'Running party {evaluator_rank} in {device}')
 
             process_name = "evaluator process " + str(evaluator_rank)
             process = multiprocessing.Process(
@@ -119,7 +119,7 @@ class MultiProcessLauncher:
         os.environ["RANK"] = str(rank)
         orig_logging_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.INFO)
-        curl.init(cfg_file, device=device)
+        curl.init(cfg_file, str(rank), device=device)
         logging.getLogger().setLevel(orig_logging_level)
         if fn_args is None:
             run_process_fn()
