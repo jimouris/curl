@@ -60,7 +60,7 @@ class EvaluatorClient:
             if mpc_party_rank == 0:
                 message = {
                     "function": func_name,
-                    "precision": tensor.encoder.precision_bits,
+                    "scale": tensor.encoder.scale,
                 }
                 for i in range(evaluators_size):
                     evaluator_rank = world_size + i
@@ -164,19 +164,18 @@ class EvaluatorServer:
                     logging.info(f"Evaluator Server {evaluator_rank - world_size} shutting down.")
                     exit()
                 function = str(message["function"])
-                precision = message["precision"]
+                scale = message["scale"]
                 tensor_size = message["tensor_size"]
 
                 # Receive data from all the MPC nodes
                 results = [torch.empty(tensor_size, dtype=torch.long) for _ in range(world_size)]
                 for mpc_node in range(world_size):
-                    # requests[mpc_node] = communicator.irecv(results[mpc_node], mpc_node, self.eval_group)
                     logging.debug(f"Evaluator Server {evaluator_rank - world_size - 1} receiving from MPC party {mpc_node}. Group: [{mpc_node}][{evaluator_rank-world_size-ttp}]")
                     communicator.broadcast(results[mpc_node], mpc_node, self.eval_groups[mpc_node][evaluator_rank-world_size-ttp])
 
                 # Reconstruct
                 tensor = sum(results)
-                tensor = tensor.float() / 2**precision
+                tensor = tensor.float() / scale
                 if function == "layernorm":
                     mean = tensor.mean(-1, keepdims=True)
                     variance = tensor.var(-1, keepdims=True)
