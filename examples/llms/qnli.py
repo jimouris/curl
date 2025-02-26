@@ -74,7 +74,7 @@ def run_qnli_accuracy_test(model, curl_model, data, targets, total):
         result_enc = outputs_enc.get_plain_text()
         print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
-        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, {count/label=}, {count_enc/label=}")
+        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, accuracy={count/(label+1)=}, accuracy_enc={count_enc/(label+1)}")
     return count / total, count_enc / total
 
 

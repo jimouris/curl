@@ -41,7 +41,7 @@ def load_data(mode):
         case "disk":
             dataset = load_from_disk('examples/llms/glue_data/lambada_test.jsonl')
         case _:
-            raise ValueError("Invalid data mode")
+            raise ValueError(f"Invalid data mode {mode}")
     return dataset
 
 def get_gpt_model(path, mode):
@@ -58,7 +58,7 @@ def get_gpt_model(path, mode):
         case "Secret":
             from examples.llms.gpt_curl import GPT2LMHead
         case _:
-            raise NotImplementedError
+            raise ValueError(f"Invalid model mode {mode}")
 
     curl_model = GPT2LMHead()
     curl_model.load_state_dict(model.state_dict())

@@ -53,7 +53,7 @@ def get_bert_model(path, encyrpted_model):
     return curl_bert_model, bert_tokenizer, bert_model
 
 
-def run_sst2_accuracy_test(model, curl_model, data, targets, total):
+def run_sst2_accuracy_test(model, curl_model, data, targets, total, device):
     count = 0
     count_enc = 0
     print(f"{total=}")
@@ -66,13 +66,13 @@ def run_sst2_accuracy_test(model, curl_model, data, targets, total):
         count += targets[label] == result.argmax()
         # Encrypted
         x_enc = {}
-        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0)
-        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
+        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0, device = device)
+        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0, device = device)
         outputs_enc = curl_model(**x_enc)
         result_enc = outputs_enc.get_plain_text()
         print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
-        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, {count/label=}, {count_enc/label=}")
+        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, accuracy={count/(label+1)=}, accuracy_enc={count_enc/(label+1)}")
     return count / total, count_enc / total
 
 
@@ -100,7 +100,7 @@ def run_sst2(cfg_file, model, count=100, communication=False, device=None):
     if count < 1:
         count = len(data)
 
-    base_accuracy, curl_accuracy = run_sst2_accuracy_test(bert_model, curl_bert_model, data, targets, count)
+    base_accuracy, curl_accuracy = run_sst2_accuracy_test(bert_model, curl_bert_model, data, targets, count, device)
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
@@ -148,7 +148,7 @@ def get_args():
         action="store_true",
         help="Print communication statistics",
     )
-    models = ['BertTiny', 'BertBase']
+    models = ['BertTiny', 'BertBase', 'BertLarge']
     parser.add_argument(
         "--model",
         choices=models,
@@ -203,6 +203,8 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
+    if args.multi_gpu:
+        args.device = "cuda"
     run_sst2(cfg_file, args.model, args.count, args.communication, args.device)
 
     print('Done')
