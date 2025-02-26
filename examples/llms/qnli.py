@@ -10,6 +10,7 @@ import logging
 import os
 import torch
 from math import ceil, log2
+
 from transformers import AutoTokenizer, BertForSequenceClassification
 import time
 
@@ -17,7 +18,9 @@ import curl
 import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
+from examples.llms.bert_for_sequence_classification import (BertTinyForSequenceClassification,
+                                                            BertBaseForSequenceClassification,
+                                                            BertLargeForSequenceClassification)
 
 
 def load_tsv(data_file, tokenizer, delimiter='\t'):
@@ -81,10 +84,20 @@ def run_qnli(cfg_file, model, count=100, communication=False, device=None):
     if communication:
         comm.get().set_verbosity(True)
 
-    if model == "BertBase":
-        curl_bert_model, bert_tokenizer, bert_model = get_bert_model("gchhablani/bert-base-cased-finetuned-qnli", BertBaseForSequenceClassification)
-    elif model == "BertTiny":
-        curl_bert_model, bert_tokenizer, bert_model = get_bert_model("M-FAC/bert-tiny-finetuned-qnli", BertTinyForSequenceClassification)
+    match model:
+        case "BertTiny":
+            path = "M-FAC/bert-tiny-finetuned-qnli"
+            model_type = BertTinyForSequenceClassification
+        case "BertBase":
+            path = "gchhablani/bert-base-cased-finetuned-qnli"
+            model_type = BertBaseForSequenceClassification
+        case "BertLarge":
+            path = "Cheng98/bert-large-qnli"
+            model_type = BertLargeForSequenceClassification
+        case _:
+            raise ValueError("Unknown model type")
+
+    curl_bert_model, bert_tokenizer, bert_model = get_bert_model(path, model_type)
     data, targets = load_tsv("examples/llms/glue_data/QNLI/dev.tsv", bert_tokenizer)
 
     if count < 1:
@@ -138,7 +151,7 @@ def get_args():
         action="store_true",
         help="Print communication statistics",
     )
-    models = ['BertTiny', 'BertBase']
+    models = ['BertTiny', 'BertBase', 'BertLarge']
     parser.add_argument(
         "--model",
         choices=models,

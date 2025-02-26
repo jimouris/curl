@@ -41,7 +41,7 @@ def load_data(mode):
         case "disk":
             dataset = load_from_disk('examples/llms/glue_data/lambada_test.jsonl')
         case _:
-            raise NotImplementedError
+            raise ValueError("Invalid data mode")
     return dataset
 
 def get_gpt_model(path, mode):
