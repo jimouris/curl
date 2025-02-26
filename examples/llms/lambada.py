@@ -52,11 +52,11 @@ def get_gpt_model(path, mode):
 
     match mode:
         case "Clear":
-            from examples.llms.gpt_clear import GPT2LMHead
+            from examples.llms.models.gpt_clear import GPT2LMHead
         case "Fixed":
-            from examples.llms.gpt_fixed import GPT2LMHead
+            from examples.llms.models.gpt_fixed import GPT2LMHead
         case "Secret":
-            from examples.llms.gpt_curl import GPT2LMHead
+            from examples.llms.models.gpt_curl import GPT2LMHead
         case _:
             raise ValueError(f"Invalid model mode {mode}")
 

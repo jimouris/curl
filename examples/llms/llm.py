@@ -53,8 +53,8 @@ class LLMs:
     """
 
     def __init__(self, model, tensor_size, device="cpu", full=True):
-        from examples.llms.gpt import GPT2, GPTNeo
-        from examples.llms.bert import BertTiny, BertBase, BertLarge
+        from examples.llms.models.gpt import GPT2, GPTNeo
+        from examples.llms.models.bert import BertTiny, BertBase, BertLarge
 
         all_models = {
             'gpt2': GPT2,
@@ -85,7 +85,9 @@ class LLMs:
     @staticmethod
     @time_me
     def time_llm(x, model):
-        return model(x)
+        with curl.no_grad():
+            output = model(x)
+        return output
 
     def get_runtimes(self):
         """Returns plain text and curl runtimes"""
