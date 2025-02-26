@@ -23,8 +23,7 @@ from examples.llms.bert_for_sequence_classification import (BertTinyForSequenceC
                                                             BertLargeForSequenceClassification)
 
 
-def load_tsv(data_file, tokenizer, delimiter='\t'):
-    '''Load a tsv '''
+def load_tsv(data_file, tokenizer, device, delimiter='\t'):
     sentences = []
     targets = []
     with codecs.open(data_file, 'r', 'utf-8') as data_fh:
@@ -32,14 +31,16 @@ def load_tsv(data_file, tokenizer, delimiter='\t'):
             data_fh.readline()
         for row in data_fh:
             row = row.strip().split(delimiter)
-            sentences.append(tokenizer(row[1][:512], row[2][:512], return_tensors="pt"))
+            sentences.append(tokenizer(row[1][:512], row[2][:512], return_tensors="pt").to(device))
             targets.append(1*(row[3] == "not_entailment"))
     return sentences, targets
 
 
-def get_bert_model(path, encyrpted_model):
+def get_bert_model(path, encyrpted_model, device):
     bert_model = BertForSequenceClassification.from_pretrained(path)
     bert_model.eval()
+    bert_model.to(device)
+
     curl_bert_model = encyrpted_model()
     curl_bert_model.load_state_dict(bert_model.state_dict())
 
@@ -51,11 +52,13 @@ def get_bert_model(path, encyrpted_model):
     curl_bert_model.bert.embeddings.word_embeddings.weight = torch.cat((weight, append))
 
     curl_bert_model.encrypt(src=0)
+    curl_bert_model.to(device)
+
     bert_tokenizer = AutoTokenizer.from_pretrained(path)
     return curl_bert_model, bert_tokenizer, bert_model
 
 
-def run_qnli_accuracy_test(model, curl_model, data, targets, total):
+def run_qnli_accuracy_test(model, curl_model, data, targets, total, device):
     count = 0
     count_enc = 0
     print(f"{total=}")
@@ -68,13 +71,13 @@ def run_qnli_accuracy_test(model, curl_model, data, targets, total):
         count += targets[label] == result.argmax()
         # Encrypted
         x_enc = {}
-        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0)
-        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
+        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision=0, device=device)
+        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision=0, device=device)
         outputs_enc = curl_model(**x_enc)
         result_enc = outputs_enc.get_plain_text()
         print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
-        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, accuracy={count/(label+1)=}, accuracy_enc={count_enc/(label+1)}")
+        print(f"{label=}, time={time.time()-now}, {count=}, {count_enc=}, accuracy={count/(label+1)}, accuracy_enc={count_enc/(label+1)}")
     return count / total, count_enc / total
 
 
@@ -97,13 +100,13 @@ def run_qnli(cfg_file, model, count=100, communication=False, device=None):
         case _:
             raise ValueError("Unknown model type")
 
-    curl_bert_model, bert_tokenizer, bert_model = get_bert_model(path, model_type)
-    data, targets = load_tsv("examples/llms/glue_data/QNLI/dev.tsv", bert_tokenizer)
+    curl_bert_model, bert_tokenizer, bert_model = get_bert_model(path, model_type, device)
+    data, targets = load_tsv("examples/llms/glue_data/QNLI/dev.tsv", bert_tokenizer, device)
 
     if count < 1:
         count = len(data)
 
-    base_accuracy, curl_accuracy = run_qnli_accuracy_test(bert_model, curl_bert_model, data, targets, count)
+    base_accuracy, curl_accuracy = run_qnli_accuracy_test(bert_model, curl_bert_model, data, targets, count, device)
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 

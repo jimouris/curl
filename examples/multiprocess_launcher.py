@@ -62,8 +62,8 @@ class MultiProcessLauncher:
                 if fn_args.world_size < torch.cuda.device_count():
                     ttp_device = torch.device(f"cuda:{world_size}")
                 else:
-                    ttp_device = torch.device(f"cuda:0")
-                    # ttp_device = torch.device(f"cpu")
+                    # ttp_device = torch.device(f"cuda:0")
+                    ttp_device = torch.device(f"cpu")
             else:
                 ttp_device = device
 

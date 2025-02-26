@@ -218,7 +218,7 @@ def evaluate_embed(x, embed):
     """
     from .arithmetic import ArithmeticSharedTensor
 
-    embed = ArithmeticSharedTensor.from_shares(embed, precision=0)
+    embed = ArithmeticSharedTensor.from_shares(embed, precision=0, device=x.device)
     embed = embed.reveal()
     result = x.reveal() % embed.shape[0]
     x.share = embed[result]
