@@ -7,7 +7,10 @@
 
 import curl
 import curl.communicator as comm
+import jax
+import jax.numpy as jnp
 import torch
+
 from curl.common.util import count_wraps
 from curl.config import cfg
 
@@ -64,10 +67,30 @@ def __beaver_protocol(op, x, y, *args, **kwargs):
     with IgnoreEncodings([a, b, x, y]):
         epsilon, delta = ArithmeticSharedTensor.reveal_batch([x - a, y - b])
 
-    # z = c + (a * delta) + (epsilon * b) + epsilon * delta
-    c._tensor += getattr(torch, op)(epsilon, b._tensor, *args, **kwargs)
-    c._tensor += getattr(torch, op)(a._tensor, delta, *args, **kwargs)
-    c += getattr(torch, op)(epsilon, delta, *args, **kwargs)
+    if cfg.mpc.jax and op == "matmul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        z = jnp.matmul(epsilon, b) + jnp.matmul(a, delta)
+        if comm.get().get_rank() == 0:
+            z += jnp.matmul(epsilon, delta)
+        c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
+    if cfg.mpc.jax and op == "mul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        z = jnp.multiply(epsilon, b) + jnp.multiply(a, delta)
+        if comm.get().get_rank() == 0:
+            z += jnp.multiply(epsilon, delta)
+        c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
+    else:
+        # z = c + (a * delta) + (epsilon * b) + epsilon * delta
+        c._tensor += getattr(torch, op)(epsilon, b._tensor, *args, **kwargs)
+        c._tensor += getattr(torch, op)(a._tensor, delta, *args, **kwargs)
+        if comm.get().get_rank() == 0:
+            c._tensor += getattr(torch, op)(epsilon, delta, *args, **kwargs)
 
     return c
 

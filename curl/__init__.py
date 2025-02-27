@@ -19,6 +19,7 @@ import curl.config  # noqa: F401
 import curl.mpc  # noqa: F401
 import curl.nn  # noqa: F401
 import curl.optim  # noqa: F401
+import jax
 import torch
 
 # other imports:
@@ -55,6 +56,7 @@ def init(config_file=None, party_name=None, device=None):
         device (int, str, torch.device): Specify device for RNG generators on
         GPU. Must be a GPU device.
     """
+    jax.config.update("jax_enable_x64", True)
     # Load config file
     if config_file is not None:
         cfg.load_config(config_file)
