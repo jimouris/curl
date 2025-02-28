@@ -90,6 +90,7 @@ class LLMs:
         return model(x)
 
     def get_runtimes(self):
+        from examples.llms.llama import Llama1B
         """Returns plain text and curl runtimes"""
         runtimes_enc = []
         for llm in self.models:
@@ -97,6 +98,8 @@ class LLMs:
                 x = torch.rand(self.tensor_size, device=self.device)
             else:
                 x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
+            if isinstance(llm, Llama1B):
+                x = (torch.cat([torch.tensor([1]), torch.rand(self.tensor_size[1])]) * 128_000).long().to(self.device)
             x_enc = curl.cryptensor(x)
 
             llm.eval()

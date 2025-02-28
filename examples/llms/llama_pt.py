@@ -91,7 +91,7 @@ class RMSNorm(nn.Module):
         self.norm_weights.data.copy_(model[layer])
 
 
-class RotaryEmbedding(nn.Module):
+class RotatoryEmbedding(nn.Module):
 
     def __init__(self, rope_theta, head_dim, max_seq_len):
         super().__init__()
@@ -111,11 +111,14 @@ class RotaryEmbedding(nn.Module):
         t = torch.arange(self.max_seq_len, dtype=torch.float)
         freqs = torch.outer(t, freqs)
         freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
+        print("Freqs cis:", freqs_cis.shape)
         return freqs_cis
 
     def forward(self, q_or_k):
+        print("Q or K:", q_or_k.shape)
         q_split = q_or_k.float().view(q_or_k.size(0), -1, 2)
         q_complex = torch.view_as_complex(q_split)
+        print("Q complex:", q_complex.shape, " Freqs:", self.freqs_cis[: q_or_k.size(0)].shape)
         q_rotated_complex = q_complex * self.freqs_cis[: q_or_k.size(0)]
         q_rotated = torch.view_as_real(q_rotated_complex).view(q_or_k.size())
         return q_rotated
@@ -138,9 +141,13 @@ class Attention(nn.Module):
         q = self.wq[head]
         k = self.wk[head // (self.n_heads // self.n_kv_heads)]
         v = self.wv[head // (self.n_heads // self.n_kv_heads)]
+        print("Q:", q.shape, " K:", k.shape, " V:", v.shape)
+
         q_per_token = torch.matmul(x, q.T)
         k_per_token = torch.matmul(x, k.T)
         v_per_token = torch.matmul(x, v.T)
+        print("Q per token:", q_per_token.shape, " K per token:", k_per_token.shape, " V per token:", v_per_token.shape)
+
         return q_per_token, k_per_token, v_per_token
 
     def forward_all(self, x):
@@ -153,51 +160,6 @@ class Attention(nn.Module):
         self.wq.data.copy_(model[f"layers.{layer}.attention.wq.weight"].view(self.wq.size()))
         self.wk.data.copy_(model[f"layers.{layer}.attention.wk.weight"].view(self.wk.size()))
         self.wv.data.copy_(model[f"layers.{layer}.attention.wv.weight"].view(self.wv.size()))
-
-
-class Transformer(nn.Module):
-
-    def __init__(self, config):
-        super().__init__()
-        self.n_heads = config.n_heads
-        self.rms = RMSNorm(config.norm_eps, config.dim)
-        self.rope = RotaryEmbedding(config.rope_theta, config.head_dim, config.max_seq_len)
-        self.attention = Attention(config)
-        self.ff = FeedForward(config)
-
-    def forward(self, x):
-        qkv_attention_store = []
-        layer_embedding_norm = self.rms(x)
-        for head in range(self.n_heads):
-            qt, kt, vt = self.attention(layer_embedding_norm, head)
-            q_rotated = self.rope(qt)
-            k_rotated = self.rope(kt)
-            qk = Transformer.compute_qk_attention(q_rotated, k_rotated)
-            qk_masked = Transformer.apply_attention_mask(qk, x.size(0))
-            attention_weights = torch.nn.functional.softmax(qk_masked, dim=1)  # .to(torch.bfloat16)
-            qkv_attention = torch.matmul(attention_weights, vt)
-            qkv_attention_store.append(qkv_attention)
-
-        stacked_qkv_attention = torch.cat(qkv_attention_store, dim=-1)
-        return self.ff(stacked_qkv_attention, x)
-
-    @staticmethod
-    def compute_qk_attention(q_rotated, k_rotated):
-        qk = torch.matmul(q_rotated, k_rotated.T) / (q_rotated.size(-1) ** 0.5)
-        return qk
-
-    @staticmethod
-    def apply_attention_mask(qk, token_count):
-        mask = torch.full((token_count, token_count), float("-inf"))
-        mask = torch.triu(mask, diagonal=1)
-        return qk + mask
-
-    def load_weights(self, model, layer):
-        self.rms.load_weights(model, f"layers.{layer}.attention_norm.weight")
-        self.rope.load_weights(model, layer)
-        self.attention.load_weights(model, layer)
-        self.ff.load_weights(model, layer)
-
 
 class FeedForward(nn.Module):
     def __init__(self, config):
@@ -229,10 +191,56 @@ class FeedForward(nn.Module):
         self.w3.data.copy_(model[f"layers.{layer}.feed_forward.w3.weight"])
 
 
+class Transformer(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.n_heads = config.n_heads
+        self.rms = RMSNorm(config.norm_eps, config.dim)
+        self.rope = RotatoryEmbedding(config.rope_theta, config.head_dim, config.max_seq_len)
+        self.attention = Attention(config)
+        self.ff = FeedForward(config)
+
+    def forward(self, x):
+        qkv_attention_store = []
+        layer_embedding_norm = self.rms(x)
+        for head in range(self.n_heads):
+            qt, kt, vt = self.attention(layer_embedding_norm, head)
+            q_rotated = self.rope(qt)
+            k_rotated = self.rope(kt)
+            print("Q rotated:", q_rotated.shape, " K rotated:", k_rotated.shape)
+            qk = Transformer.compute_qk_attention(q_rotated, k_rotated)
+            qk_masked = Transformer.apply_attention_mask(qk, x.size(0))
+            attention_weights = torch.nn.functional.softmax(qk_masked, dim=1)  # .to(torch.bfloat16)
+            qkv_attention = torch.matmul(attention_weights, vt)
+            qkv_attention_store.append(qkv_attention)
+
+        stacked_qkv_attention = torch.cat(qkv_attention_store, dim=-1)
+        return self.ff(stacked_qkv_attention, x)
+
+    @staticmethod
+    def compute_qk_attention(q_rotated, k_rotated):
+        qk = torch.matmul(q_rotated, k_rotated.T) / (q_rotated.size(-1) ** 0.5)
+        return qk
+
+    @staticmethod
+    def apply_attention_mask(qk, token_count):
+        mask = torch.full((token_count, token_count), float("-inf"))
+        mask = torch.triu(mask, diagonal=1)
+        return qk + mask
+
+    def load_weights(self, model, layer):
+        self.rms.load_weights(model, f"layers.{layer}.attention_norm.weight")
+        self.rope.load_weights(model, layer)
+        self.attention.load_weights(model, layer)
+        self.ff.load_weights(model, layer)
+
+
 class Llama(nn.Module):
     def __init__(self, base_path: str):
         super().__init__()
         self.config = Llama.load_config(base_path)
+        print("CONFIG: ", self.config)
         self.layers = nn.ModuleList([Transformer(self.config) for _ in range(self.config.n_layers)])
         self.embedding = Embedding(self.config.vocab_size, self.config.dim)
         self.output_weight = nn.Parameter(torch.ones(self.config.vocab_size, self.config.dim))
