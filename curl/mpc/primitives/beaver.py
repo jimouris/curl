@@ -13,8 +13,12 @@ import torch
 
 from curl.common.util import count_wraps
 from curl.config import cfg
+from jax.lib import xla_bridge
 
 from .util import IgnoreEncodings
+
+jax.config.update("jax_enable_x64", True)
+xla_bridge.get_backend().platform
 
 
 def __beaver_protocol(op, x, y, *args, **kwargs):
@@ -76,7 +80,7 @@ def __beaver_protocol(op, x, y, *args, **kwargs):
         if comm.get().get_rank() == 0:
             z += jnp.matmul(epsilon, delta)
         c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
-    if cfg.mpc.jax and op == "mul":
+    elif cfg.mpc.jax and op == "mul":
         epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
         delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
         a = jnp.array(a._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])

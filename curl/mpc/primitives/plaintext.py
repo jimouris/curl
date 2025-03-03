@@ -13,8 +13,12 @@ import torch
 
 from curl.common.util import count_wraps
 from curl.config import cfg
+from jax.lib import xla_bridge
 
 from .util import IgnoreEncodings
+
+jax.config.update("jax_enable_x64", True)
+xla_bridge.get_backend().platform
 
 
 def __plaintext_protocol(op, x, y, *args, **kwargs):
