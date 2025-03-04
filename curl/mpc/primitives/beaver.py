@@ -71,20 +71,25 @@ def __beaver_protocol(op, x, y, *args, **kwargs):
     with IgnoreEncodings([a, b, x, y]):
         epsilon, delta = ArithmeticSharedTensor.reveal_batch([x - a, y - b])
 
+    if cfg.mpc.jax:
+        device = jax.devices("cpu")[0]
+        if x.device.type == "cuda":
+            device = jax.devices("cuda")[x.device.index]
+
     if cfg.mpc.jax and op == "matmul":
-        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=device)
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=device)
         z = jnp.matmul(epsilon, b) + jnp.matmul(a, delta)
         if comm.get().get_rank() == 0:
             z += jnp.matmul(epsilon, delta)
         c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
     elif cfg.mpc.jax and op == "mul":
-        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=device)
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=device)
         z = jnp.multiply(epsilon, b) + jnp.multiply(a, delta)
         if comm.get().get_rank() == 0:
             z += jnp.multiply(epsilon, delta)
