@@ -104,6 +104,7 @@ mpc:
   active_security: False
   provider: "TFP"
   protocol: "beaver"
+  jax: True
 nn:
   dpsmpc:
     protocol: "layer_estimation"
