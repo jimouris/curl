@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-python examples/llms/qnli.py --world_size 2 --model BertBase
+python examples/llms/classification.py --task qnli --model BertBase --world_size 2 --evaluator_size 2 --multiprocess
 """
 
 import argparse
@@ -10,32 +10,50 @@ import logging
 import os
 import torch
 from math import ceil, log2
+
 from transformers import AutoTokenizer, BertForSequenceClassification
+import time
 
 import curl
 import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
+from examples.llms.models.bert_for_sequence_classification import (BertTinyForSequenceClassification,
+                                                                   BertBaseForSequenceClassification,
+                                                                   BertLargeForSequenceClassification)
 
 
-def load_tsv(data_file, tokenizer, delimiter='\t'):
-    '''Load a tsv '''
+def load_tsv(task, tokenizer, device, delimiter='\t'):
+    if task == "qnli":
+        data_file = "examples/llms/glue_data/QNLI/dev.tsv"
+    elif task == "sst2":
+        data_file = "examples/llms/glue_data/SST2/dev.tsv"
+    else:
+        raise ValueError(f"unknown task: {task}")
+
     sentences = []
     targets = []
     with codecs.open(data_file, 'r', 'utf-8') as data_fh:
-        for _ in range(1):
-            data_fh.readline()
+        if task == "qnli":
+            for _ in range(1):
+                data_fh.readline()
         for row in data_fh:
             row = row.strip().split(delimiter)
-            sentences.append(tokenizer(row[1][:512], row[2][:512], return_tensors="pt"))
-            targets.append(1*(row[3] == "not_entailment"))
+            if task == "qnli":
+                sentences.append(tokenizer(row[1][:512], row[2][:512], return_tensors="pt").to(device))
+                targets.append(1*(row[3] == "not_entailment"))
+            elif task == "sst2":
+                sentences.append(tokenizer(row[1][:512], return_tensors="pt").to(device))
+                targets.append(int(row[0]))
     return sentences, targets
 
 
-def get_bert_model(path, encyrpted_model):
+def get_bert_model(path, encyrpted_model, device):
+    bert_tokenizer = AutoTokenizer.from_pretrained(path)
     bert_model = BertForSequenceClassification.from_pretrained(path)
     bert_model.eval()
+    bert_model.to(device)
+
     curl_bert_model = encyrpted_model()
     curl_bert_model.load_state_dict(bert_model.state_dict())
 
@@ -47,46 +65,71 @@ def get_bert_model(path, encyrpted_model):
     curl_bert_model.bert.embeddings.word_embeddings.weight = torch.cat((weight, append))
 
     curl_bert_model.encrypt(src=0)
-    bert_tokenizer = AutoTokenizer.from_pretrained(path)
-    return curl_bert_model, bert_tokenizer, bert_model
+    curl_bert_model.to(device)
+    return bert_tokenizer, bert_model, curl_bert_model
 
 
-def run_qnli_accuracy_test(model, curl_model, data, targets, total):
+def run_accuracy_test(model, curl_model, data, targets, total, device):
     count = 0
     count_enc = 0
-    for i, label in enumerate(range(total)):
+    print(f"{total=}")
+    start = 0
+    now = time.time()
+    for label in range(start, total):
         # Plaintext
-        outputs = model(**data[label])
+        with torch.no_grad():
+            outputs = model(**data[label])
         result = outputs.logits
         count += targets[label] == result.argmax()
         # Encrypted
-        x_enc = {}
-        x_enc['input_ids'] = curl.cryptensor(data[label]["input_ids"], precision = 0)
-        x_enc['token_type_ids'] = curl.cryptensor(data[label]["token_type_ids"], precision = 0)
-        outputs_enc = curl_model(**x_enc)
+        x_enc = {'input_ids': curl.cryptensor(data[label]["input_ids"], precision=0, device=device),
+                 'token_type_ids': curl.cryptensor(data[label]["token_type_ids"], precision=0, device=device)}
+        with curl.no_grad():
+            outputs_enc = curl_model(**x_enc)
         result_enc = outputs_enc.get_plain_text()
-        print(f"{result=}, {result_enc=}")
         count_enc += targets[label] == result_enc.argmax()
-        print(f"{i=}, {count/i=}, {count_enc/i=}")
+        # Prints
+        print(f"{result=}, {result_enc=}")
+        print(f"{label=}, time={time.time()-now:.4}, count={count.item()}, count_enc={count_enc.item()}")
+        print(f"exaccuracy={count/(label+1):.4}, accuracy_enc={count_enc/(label+1):.4}")
     return count / total, count_enc / total
 
 
-def run_qnli(cfg_file, model, count=100, communication=False, device=None):
+def run_classification(cfg_file, task, model, count=100, communication=False, device=None):
     # First cold run.
     curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
-    if model == "BertBase":
-        curl_bert_model, bert_tokenizer, bert_model = get_bert_model("gchhablani/bert-base-cased-finetuned-qnli", BertBaseForSequenceClassification)
-    elif model == "BertTiny":
-        curl_bert_model, bert_tokenizer, bert_model = get_bert_model("M-FAC/bert-tiny-finetuned-qnli", BertTinyForSequenceClassification)
-    data, targets = load_tsv("examples/llms/glue_data/QNLI/dev.tsv", bert_tokenizer)
+    match model:
+        case "BertTiny":
+            if task == "qnli":
+                path = "M-FAC/bert-tiny-finetuned-qnli"
+            elif task == "sst2":
+                path = "philschmid/tiny-bert-sst2-distilled"
+            model_type = BertTinyForSequenceClassification
+        case "BertBase":
+            if task == "qnli":
+                path = "gchhablani/bert-base-cased-finetuned-qnli"
+            elif task == "sst2":
+                path = "gchhablani/bert-base-cased-finetuned-sst2"
+            model_type = BertBaseForSequenceClassification
+        case "BertLarge":
+            if task == "qnli":
+                path = "Cheng98/bert-large-qnli"
+            elif task == "sst2":
+                path = "Cheng98/bert-large-sst2"
+            model_type = BertLargeForSequenceClassification
+        case _:
+            raise ValueError("Unknown model type")
+
+    bert_tokenizer, bert_model, curl_bert_model = get_bert_model(path, model_type, device)
+    data, targets = load_tsv(task, bert_tokenizer, device)
 
     if count < 1:
         count = len(data)
 
-    base_accuracy, curl_accuracy = run_qnli_accuracy_test(bert_model, curl_bert_model, data, targets, count)
+    base_accuracy, curl_accuracy = run_accuracy_test(bert_model, curl_bert_model, data, targets, count, device)
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
@@ -96,7 +139,7 @@ def run_qnli(cfg_file, model, count=100, communication=False, device=None):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description="Curl LLM QNLI Test")
+    parser = argparse.ArgumentParser(description="Curl LLM Classification Test")
     parser.add_argument(
         "--world_size",
         type=int,
@@ -134,7 +177,7 @@ def get_args():
         action="store_true",
         help="Print communication statistics",
     )
-    models = ['BertTiny', 'BertBase']
+    models = ['BertTiny', 'BertBase', 'BertLarge']
     parser.add_argument(
         "--model",
         choices=models,
@@ -163,6 +206,13 @@ def get_args():
         action="store_true",
         help="use different gpu for each party. Will override --device if selected",
     )
+    tasks = ['qnli', 'sst2']
+    parser.add_argument(
+        "--task",
+        choices=tasks,
+        required=True,
+        help="Choose a task to run from the following options: {}".format(tasks),
+    )
     args = parser.parse_args()
     return args
 
@@ -189,7 +239,7 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_qnli(cfg_file, args.model, args.count, args.communication, args.device)
+    run_classification(cfg_file, args.task, args.model, args.count, args.communication, args.device)
 
     print('Done')
 

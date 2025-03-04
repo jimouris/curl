@@ -34,7 +34,7 @@ class MultiProcessLauncher:
         # Using multiple GPUs
         if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
             assert (
-                fn_args.world_size < torch.cuda.device_count()
+                fn_args.world_size <= torch.cuda.device_count()
             ), f"Got {fn_args.world_size} parties, but only {torch.cuda.device_count()} GPUs found"
 
         self.processes = []
@@ -45,9 +45,9 @@ class MultiProcessLauncher:
                 device = torch.device(f"cuda:{rank}")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
-                print(f'Running party {rank} in {device}')
             else:
                 new_args = fn_args
+            print(f'Running party {rank} in {device}')
 
             process_name = "process " + str(rank)
             process = multiprocessing.Process(
@@ -59,10 +59,15 @@ class MultiProcessLauncher:
 
         if curl.mpc.ttp_required():
             if 'multi_gpu' in fn_args and fn_args.multi_gpu:
-                ttp_device = torch.device(f"cuda:{world_size}")
+                if fn_args.world_size < torch.cuda.device_count():
+                    ttp_device = torch.device(f"cuda:{world_size}")
+                else:
+                    # ttp_device = torch.device(f"cuda:0")
+                    ttp_device = torch.device(f"cpu")
             else:
                 ttp_device = device
 
+            print(f'Running party {world_size} in {ttp_device}')
             self.ttp_process = multiprocessing.Process(
                 target=self.__class__._run_process,
                 name="TTP",
@@ -83,12 +88,12 @@ class MultiProcessLauncher:
             if self.ttp_process:
                 evaluator_rank += 1
             if fn_args is not None and 'multi_gpu' in fn_args and fn_args.multi_gpu:
-                device = torch.device(f"cuda:{evaluator_rank}")
+                device = torch.device(f"cpu")
                 new_args = copy.deepcopy(fn_args)
                 new_args.device = device
-                print(f'Running party {evaluator_rank} in {device}')
             else:
                 new_args = fn_args
+            print(f'Running party {evaluator_rank} in {device}')
 
             process_name = "evaluator process " + str(evaluator_rank)
             process = multiprocessing.Process(
@@ -114,7 +119,7 @@ class MultiProcessLauncher:
         os.environ["RANK"] = str(rank)
         orig_logging_level = logging.getLogger().level
         logging.getLogger().setLevel(logging.INFO)
-        curl.init(cfg_file, device=device)
+        curl.init(cfg_file, str(rank), device=device)
         logging.getLogger().setLevel(orig_logging_level)
         if fn_args is None:
             run_process_fn()

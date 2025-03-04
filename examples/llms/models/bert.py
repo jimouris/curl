@@ -3,13 +3,46 @@ import curl
 import curl.nn as nn
 import torch
 
+
+class Attention(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super(Attention, self).__init__()
+
+        assert embed_dim % num_heads == 0, "invalid heads and embedding dimension"
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.search_dim = embed_dim // num_heads
+
+        self.c_attn = nn.Linear(embed_dim, 3 * embed_dim)
+        self.c_proj = nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, x, mask=False):
+        batch_size = x.shape[0]
+        seq_len = x.shape[1]
+
+        query, key, value = self.c_attn(x).split(self.embed_dim, dim=2)
+        query = query.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+        key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
+        value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
+
+        attn = query.matmul(key) / query.size(-1) ** 0.5
+        if mask:
+            attn.share = attn.share * torch.tril(torch.ones_like(attn.share, dtype=torch.long), diagonal=0)
+            attn.share = attn.share + -2**46 * torch.triu(torch.ones_like(attn.share, dtype=torch.long), diagonal=1)
+        attn = attn.softmax(dim=-1)
+
+        y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
+        y = self.c_proj(y)
+        return y
+
 class Bert(nn.Module):
     class Block(nn.Module):
         def __init__(self, embed_dim, num_heads):
             super(Bert.Block, self).__init__()
             self.ln1 = nn.LayerNorm(embed_dim)
             self.ln2 = nn.LayerNorm(embed_dim)
-            self.attn = nn.Attention(embed_dim, num_heads)
+            self.attn = Attention(embed_dim, num_heads)
             self.ff = nn.Sequential(
                 nn.Linear(embed_dim, embed_dim * 4),
                 nn.GELU(),

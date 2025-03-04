@@ -5,14 +5,20 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import logging
 import curl
 import curl.communicator as comm
+import jax
+import jax.numpy as jnp
 import torch
+
 from curl.common.util import count_wraps
 from curl.config import cfg
+from jax.lib import xla_bridge
 
 from .util import IgnoreEncodings
+
+jax.config.update("jax_enable_x64", True)
+xla_bridge.get_backend().platform
 
 
 def __plaintext_protocol(op, x, y, *args, **kwargs):
@@ -35,7 +41,18 @@ def __plaintext_protocol(op, x, y, *args, **kwargs):
     from .arithmetic import ArithmeticSharedTensor
 
     epsilon, delta = ArithmeticSharedTensor.reveal_batch([x, y])
-    inner = getattr(torch, op)(epsilon, delta, *args, **kwargs)
+    if cfg.mpc.jax and op == "matmul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        inner = jnp.matmul(epsilon, delta)
+        inner = torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(inner))
+    elif cfg.mpc.jax and op == "mul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        inner = jnp.multiply(epsilon, delta)
+        inner = torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(inner))
+    else:
+        inner = getattr(torch, op)(epsilon, delta, *args, **kwargs)
     z = ArithmeticSharedTensor(inner, precision=0, src=0)
     z.encoder._precision_bits = x.encoder.precision_bits + y.encoder.precision_bits
     return z
@@ -218,7 +235,7 @@ def evaluate_embed(x, embed):
     """
     from .arithmetic import ArithmeticSharedTensor
 
-    embed = ArithmeticSharedTensor.from_shares(embed, precision=0)
+    embed = ArithmeticSharedTensor.from_shares(embed, precision=0, device=x.device)
     embed = embed.reveal()
     result = x.reveal() % embed.shape[0]
     x.share = embed[result]

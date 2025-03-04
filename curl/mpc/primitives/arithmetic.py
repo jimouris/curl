@@ -200,7 +200,7 @@ class ArithmeticSharedTensor:
 
     def clone(self):
         result = ArithmeticSharedTensor(src=SENTINEL)
-        result.encoder = self.encoder
+        result.encoder = FixedPointEncoder(precision_bits=self.encoder.precision_bits)
         result._tensor = self._tensor.clone()
         return result
 
@@ -319,7 +319,7 @@ class ArithmeticSharedTensor:
         else:
             scale_factor = self.encoder.scale // new_encoder.scale
             self = self.div_(scale_factor)
-        self.encoder = new_encoder
+        self.encoder._precision_bits = new_encoder.precision_bits
         return self
 
     def encode(self, new_encoder):
@@ -360,9 +360,9 @@ class ArithmeticSharedTensor:
             result = self.clone()
 
         if public:
-            if (not additive_func and cfg.encoder.trunc_method.prod == "fission"
-                    and result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
-                result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
+            if ((not additive_func) and cfg.encoder.trunc_method.prod == "fission"
+                    and result.encoder.precision_bits > cfg.encoder.precision_bits):
+                result = result.egk_trunc_pr(62, result.encoder.precision_bits - cfg.encoder.precision_bits)
                 result.encoder._precision_bits = cfg.encoder.precision_bits
             y = result.encoder.encode(y, device=self.device)
 
@@ -377,15 +377,6 @@ class ArithmeticSharedTensor:
                 result.share = getattr(torch, op)(result.share, y, *args, **kwargs)
         elif private:
             if additive_func:  # ['add', 'sub', 'add_', 'sub_']
-                if cfg.encoder.trunc_method.prod == "fission":
-                    if (result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)
-                            and y.encoder.precision_bits == cfg.encoder.precision_bits):
-                        result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
-                        result.encoder._precision_bits = cfg.encoder.precision_bits
-                    elif (y.encoder.precision_bits == (2 * cfg.encoder.precision_bits)
-                          and result.encoder.precision_bits == cfg.encoder.precision_bits):
-                        y = y.egk_trunc_pr(62, cfg.encoder.precision_bits)
-                        y.encoder._precision_bits = cfg.encoder.precision_bits
                 # Re-encode if necessary:
                 if self.encoder.scale > y.encoder.scale:
                     y.encode_as_(result)
@@ -393,14 +384,13 @@ class ArithmeticSharedTensor:
                     result.encode_as_(y)
                 result.share = getattr(result.share, op)(y.share)
             else:  # ['mul', 'matmul', 'convNd', 'conv_transposeNd']
-                if (cfg.encoder.trunc_method.prod == "fission"
-                        and result.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
-                    result = result.egk_trunc_pr(62, cfg.encoder.precision_bits)
-                    result.encoder._precision_bits = cfg.encoder.precision_bits
-                if (cfg.encoder.trunc_method.prod == "fission"
-                        and y.encoder.precision_bits == (2 * cfg.encoder.precision_bits)):
-                    y = y.egk_trunc_pr(62, cfg.encoder.precision_bits)
-                    y.encoder._precision_bits = cfg.encoder.precision_bits
+                if cfg.encoder.trunc_method.prod == "fission":
+                    if result.encoder.precision_bits > cfg.encoder.precision_bits:
+                        result = result.egk_trunc_pr(62, result.encoder.precision_bits - cfg.encoder.precision_bits)
+                        result.encoder._precision_bits = cfg.encoder.precision_bits
+                    if y.encoder.precision_bits > cfg.encoder.precision_bits:
+                        y = y.egk_trunc_pr(62, y.encoder.precision_bits - cfg.encoder.precision_bits)
+                        y.encoder._precision_bits = cfg.encoder.precision_bits
                 protocol = globals()[cfg.mpc.protocol]
                 result.share.set_(
                     getattr(protocol, op)(result, y, *args, **kwargs).share.data
@@ -412,33 +402,32 @@ class ArithmeticSharedTensor:
         if not additive_func:
             if public:  # scale by self.encoder.scale
                 if self.encoder.scale > 1:
-                    if cfg.encoder.trunc_method.prod == "crypten":
-                        return result.div_(result.encoder.scale)
-                    elif cfg.encoder.trunc_method.prod == "egk":
-                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
-                    elif cfg.encoder.trunc_method.prod == "fission":
-                        result.encoder._precision_bits *= 2
-                        return result
-                    else:
-                        raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
+                    match cfg.encoder.trunc_method.prod:
+                        case "crypten":
+                            return result.div_(result.encoder.scale)
+                        case "egk":
+                            return result.egk_trunc_pr(62, result.encoder.precision_bits)
+                        case "fission":
+                            result.encoder._precision_bits = 2 * result.encoder.precision_bits
+                            return result
+                        case _:
+                            raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
                 else:
-                    result.encoder = self.encoder
+                    result.encoder._precision_bits = self.encoder.precision_bits
             else:  # scale by larger of self.encoder.scale and y.encoder.scale
-                if self.encoder.scale > 1 and y.encoder.scale > 1:
-                    if cfg.encoder.trunc_method.prod == "crypten":
-                        return result.div_(result.encoder.scale)
-                    elif cfg.encoder.trunc_method.prod == "egk":
-                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
-                    elif cfg.encoder.trunc_method.prod == "fission":
-                        result.encoder._precision_bits += y.encoder._precision_bits
-                        return result
-                    else:
-                        raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
-                elif self.encoder.scale > 1:
-                    result.encoder = self.encoder
-                else:
-                    result.encoder = y.encoder
-
+                if result.encoder.scale > 1 and y.encoder.scale > 1:
+                    match cfg.encoder.trunc_method.prod:
+                        case "crypten":
+                            return result.div_(result.encoder.scale)
+                        case "egk":
+                            return result.egk_trunc_pr(62, result.encoder.precision_bits)
+                        case "fission":
+                            result.encoder._precision_bits = result.encoder.precision_bits + y.encoder.precision_bits
+                            return result
+                        case _:
+                            raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
+                elif y.encoder.scale > 1:
+                    result.encoder._precision_bits = y.encoder.precision_bits
         return result
 
     def add(self, y):

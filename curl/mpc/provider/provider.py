@@ -165,7 +165,8 @@ class TupleProvider:
             request = (func_name, args, hashable_kwargs)
             # Read from cache
             if request in self.tuple_cache.keys():
-                return self.tuple_cache[request].pop()
+                return self.tuple_cache[request]
+                # return self.tuple_cache[request].pop()
             # Cache miss
             return object.__getattribute__(self, func_name)(*args, **kwargs)
 
@@ -207,10 +208,10 @@ class TupleProvider:
 
             hashable_kwargs = frozenset(kwargs.items())
             hashable_request = (func_name, args, hashable_kwargs)
-            if hashable_request in self.tuple_cache.keys():
-                self.tuple_cache[hashable_request].append(result)
-            else:
-                self.tuple_cache[hashable_request] = [result]
+            if hashable_request not in self.tuple_cache.keys():
+                # self.tuple_cache[hashable_request].append(result)
+            # else:
+                self.tuple_cache[hashable_request] = result
             # Save in batches to avoid excessive memory use
             batch_count += 1
             if batch_count >= self.CACHE_SAVE_BATCH_SIZE:

@@ -128,7 +128,7 @@ def _run_experiment(args):
     # Only Rank 0 will display logs.
     level = logging.INFO
     if "RANK" in os.environ and os.environ["RANK"] != "0":
-        level = logging.DEBUG
+        level = logging.CRITICAL
     logging.getLogger().setLevel(level)
     run_llm(args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device)
 

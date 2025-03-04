@@ -158,7 +158,10 @@ class BertTinyForSequenceClassification(BertForSequenceClassification):
     def __init__(self):
         super(BertTinyForSequenceClassification, self).__init__(vocab_size=30522, emb_size=128, seq_len=512, n_heads=2, n_layers=2)
 
-
 class BertBaseForSequenceClassification(BertForSequenceClassification):
     def __init__(self):
         super(BertBaseForSequenceClassification, self).__init__(vocab_size=28996, emb_size=768, seq_len=512, n_heads=12, n_layers=12)
+
+class BertLargeForSequenceClassification(BertForSequenceClassification):
+    def __init__(self):
+        super(BertLargeForSequenceClassification, self).__init__(vocab_size=28996, emb_size=1024, seq_len=512, n_heads=16, n_layers=24)

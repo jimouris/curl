@@ -6,9 +6,7 @@ debug:
 encoder:
   precision_bits: 16
   trunc_method:
-    # prod: "crypten"
     prod: "egk"
-    # lut: "crypten"
     lut: "egk"
 functions:
   max:
@@ -110,4 +108,6 @@ nn:
     protocol: "layer_estimation"
     skip_loss_forward: True
     cache_pred_size: True
+  gradients:
+    layernorm: "normal"
 
