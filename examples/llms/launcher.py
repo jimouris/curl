@@ -81,7 +81,7 @@ def get_args():
         action="store_true",
         help="Skip embeddings and softmax",
     )
-    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'Llama']
+    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'Llama']
     parser.add_argument(
         "--model",
         choices=models,

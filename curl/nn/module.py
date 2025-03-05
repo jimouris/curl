@@ -2909,13 +2909,14 @@ class LayerNormalization(Module):
         )
 
 class LayerNorm(Module):
-    def __init__(self, shape, eps=1e-05):
+    def __init__(self, shape, eps=1e-05, bias=True):
         super().__init__()
 
         # initialize model parameters and buffers:
         pytorch_module = torch.nn.LayerNorm(shape, eps)
-        for param in ["weight", "bias"]:
-            self.register_parameter(param, getattr(pytorch_module, param))
+        self.register_parameter("weight", getattr(pytorch_module, "weight"))
+        if bias:
+            self.register_parameter("bias", getattr(pytorch_module, "bias"))
 
         # set model attributes:
         self.eps = eps
@@ -2924,9 +2925,13 @@ class LayerNorm(Module):
         self.inv_var = None
 
     def forward(self, input):
+        if hasattr(self, "bias"):
+            bias = self.bias
+        else:
+            bias = 0
         return input.layernorm(
             self.weight,
-            self.bias,
+            bias,
             training=self.training,
             eps=self.eps,
             inv_var=self.inv_var,
