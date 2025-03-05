@@ -55,13 +55,16 @@ class LLMs:
     def __init__(self, model, tensor_size, device="cpu", full=True):
         from examples.llms.models.gpt import GPT2, GPTNeo
         from examples.llms.models.bert import BertTiny, BertBase, BertLarge
+        from examples.llms.llama import Llama1B
+
 
         all_models = {
             'gpt2': GPT2,
             'gptneo': GPTNeo,
             'berttiny': BertTiny,
             'bertbase': BertBase,
-            'bertlarge': BertLarge
+            'bertlarge': BertLarge,
+            'llama': Llama1B
         }
 
         self.device = torch.device(device)
@@ -90,6 +93,7 @@ class LLMs:
         return output
 
     def get_runtimes(self):
+        from examples.llms.llama import Llama1B
         """Returns plain text and curl runtimes"""
         runtimes_enc = []
         for llm in self.models:
@@ -97,6 +101,8 @@ class LLMs:
                 x = torch.rand(self.tensor_size, device=self.device)
             else:
                 x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
+            if isinstance(llm, Llama1B):
+                x = (torch.cat([torch.tensor([1]), torch.rand(self.tensor_size[1])]) * 128_000).long().to(self.device)
             x_enc = curl.cryptensor(x)
 
             llm.eval()

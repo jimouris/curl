@@ -167,4 +167,8 @@ cython_debug/
 .vscode/
 .idea/
 .DS_Store
-.idea/
+
+Llama3.2-1B/
+Llama3.1-8B/
+.devcontainer/
+
