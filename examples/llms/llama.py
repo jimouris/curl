@@ -286,21 +286,24 @@ class FeedForward(nn.Module):
 
 
 class Llama(nn.Module):
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: str, full: bool = True):
         super().__init__()
+        self.full = full
+
         self.config = Llama.load_config(base_path)
         self.layers = nn.ModuleList(
             [Transformer(self.config) for _ in range(self.config.n_layers)]
         )
-        self.embedding = LlamaEmbedding(self.config.vocab_size, self.config.dim)
+        if full:
+            self.embedding = LlamaEmbedding(self.config.vocab_size, self.config.dim)
         self.output_weight = nn.Parameter(
             curl.cryptensor(torch.empty(self.config.vocab_size, self.config.dim))
         )
 
     @staticmethod
     def load_model(path):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = torch.load(path + "consolidated.00.pth", map_location=device)
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = torch.load(path + "consolidated.00.pth", map_location="cpu")
 
         for key, value in model.items():
             model[key] = value.to(torch.float32)
@@ -315,11 +318,12 @@ class Llama(nn.Module):
             config = LlamaConfig(**dic, head_dim=head_dim, max_seq_len=max_seq_len)
         return config
 
-    def forward(self, tokens: curl.CrypTensor):
+    def forward(self, x: curl.CrypTensor):
         start = time.time()
-        tokens = tokens.view(-1)
-        #print("[Forward] Tokens:", type(tokens), tokens.shape)
-        x = self.embedding(tokens)
+        x = x.view(-1)
+        if self.full:
+            #print("[Forward] Tokens:", type(tokens), tokens.shape)
+            x = self.embedding(x)
         #print("[Forward] Embedding:", type(x))
         for i, layer in enumerate(self.layers):
             layer_start_time = time.time()
@@ -327,14 +331,17 @@ class Llama(nn.Module):
             x = layer(x)
             #print(f"[Forward] Layer output {i}:", type(x), x.shape)
             print(f"[Forward] Layer {i} time:", time.time() - layer_start_time)
-        logits = x[-1].matmul(transpose(self.output_weight(None)))
-        next_token = logits.argmax(dim=-1)
+
+        if self.full:
+            logits = x[-1].matmul(transpose(self.output_weight(None)))
+            x = logits.argmax(dim=-1)
         print("Time: ", time.time() - start)
-        return next_token
+        return x
 
     def load_weights(self, path):
         model = Llama.load_model(path)
-        self.embedding.load_weights(model)
+        if self.full:
+            self.embedding.load_weights(model)
         for layer in range(self.config.n_layers):
             self.layers[layer].load_weights(model, layer)
         self.output_weight.data.copy_(curl.cryptensor(model["output.weight"]))
