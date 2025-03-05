@@ -33,8 +33,13 @@ __SUPPORTED_PROVIDERS = {
 }
 
 
-def get_default_provider():
-    return __SUPPORTED_PROVIDERS[cfg.mpc.provider]
+def get_default_provider(device=None):
+    provider_name = cfg.mpc.provider
+    if provider_name not in __SUPPORTED_PROVIDERS:
+        raise ValueError(f"Provider {provider_name} not supported")
+    if device is not None:
+        return provider.TrustedThirdParty(device=device) if provider_name == "TTP" else __SUPPORTED_PROVIDERS[provider_name]
+    return __SUPPORTED_PROVIDERS[provider_name]
 
 
 def ttp_required():

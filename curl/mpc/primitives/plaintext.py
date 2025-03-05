@@ -40,15 +40,20 @@ def __plaintext_protocol(op, x, y, *args, **kwargs):
 
     from .arithmetic import ArithmeticSharedTensor
 
+    if cfg.mpc.jax:
+        device = jax.devices("cpu")[0]
+        if x.device.type == "cuda":
+            device = jax.devices("cuda")[x.device.index]
+
     epsilon, delta = ArithmeticSharedTensor.reveal_batch([x, y])
     if cfg.mpc.jax and op == "matmul":
-        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
         inner = jnp.matmul(epsilon, delta)
         inner = torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(inner))
     elif cfg.mpc.jax and op == "mul":
-        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
-        delta = jnp.array(delta.data, dtype=jnp.int64, device=jax.devices("cuda")[x.device.index])
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
         inner = jnp.multiply(epsilon, delta)
         inner = torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(inner))
     else:
