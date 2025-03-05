@@ -13,6 +13,7 @@ import curl.communicator as comm
 import torch
 import warnings
 
+
 class TupleProvider:
     TRACEABLE_FUNCTIONS = [
         "generate_additive_triple",
@@ -27,10 +28,11 @@ class TupleProvider:
     _DEFAULT_CACHE_PATH = os.path.normpath(os.path.join(__file__, "../tuple_cache/"))
     CACHE_SAVE_BATCH_SIZE = 1000  # Save cache every CACHE_SAVE_BATCH_SIZE requests
 
-    def __init__(self):
+    def __init__(self, device=None):
         self.tracing = False
         self.request_cache = []
         self.tuple_cache = {}
+        self.device = device
 
     @property
     def rank(self):
@@ -91,11 +93,13 @@ class TupleProvider:
         next_index = len(existing_files)  # New file index
         batch_file = os.path.join(filepath, f"tuple_batch_{next_index}.pt")
 
-        # Save batch as a new file
-        torch.save(self.tuple_cache, batch_file)
+        # Convert generators to lists before saving
+        tensor_cache = {}
+        for key, value in self.tuple_cache.items():
+            tensor_cache[key] = list(value)
+        torch.save(tensor_cache, batch_file)
         curl.log(f"Tuple cache batch saved to {batch_file}")
         self.tuple_cache.clear()  # Clear memory after saving
-
 
     def _load_tuples(self, filepath=None):
         """Loads all batch files and reconstructs the tuple cache."""
@@ -113,14 +117,13 @@ class TupleProvider:
                     warnings.simplefilter("ignore", category=FutureWarning)
                     batch_data = torch.load(batch_path, weights_only=False)
                 for key, values in batch_data.items():
-                    if key in self.tuple_cache:
-                        self.tuple_cache[key].extend(values)
-                    else:
+                    # curl.log(f"Loading cache key: {key}")
+                    if key not in self.tuple_cache:
                         self.tuple_cache[key] = values
             except Exception as e:
                 curl.log(f"Error loading {batch_path}: {e}")
 
-        curl.log(f"Loaded {len(batch_files)} tuple cache batches.")
+        curl.log(f"Loaded {len(batch_files)} tuple cache batches with {len(self.tuple_cache)} total entries")
 
     def _save_cache(self, filepath=None):
         """Saves request and tuple cache to a file.
@@ -147,12 +150,10 @@ class TupleProvider:
 
         # Trace requests while tracing
         if self.tracing:
-
             def func_with_trace(*args, **kwargs):
-                request = (func_name, args, kwargs)
+                request = (func_name, args, kwargs)  # Save full request for tracing
                 self.request_cache.append(request)
                 return object.__getattribute__(self, func_name)(*args, **kwargs)
-
             return func_with_trace
 
         # If the cache is empty, call function directly
@@ -161,15 +162,20 @@ class TupleProvider:
 
         # Return results from cache if available
         def func_from_cache(*args, **kwargs):
-            hashable_kwargs = frozenset(kwargs.items())
-            request = (func_name, args, hashable_kwargs)
+            request = (func_name, args)  # Ignore kwargs for cache lookup
+            # curl.log(f"Checking cache for request: {request}")
+            # curl.log(f"Available cache keys: {list(self.tuple_cache.keys())}")
             # Read from cache
             if request in self.tuple_cache.keys():
-                return self.tuple_cache[request]
-                # return self.tuple_cache[request].pop()
+                # Move cached ArithmeticSharedTensor to appropriate device
+                device = kwargs.get('device', self.device)
+                if device is None:
+                    device = "cpu"
+                return (
+                    r.to(device) for r in self.tuple_cache[request]
+                )
             # Cache miss
             return object.__getattribute__(self, func_name)(*args, **kwargs)
-
         return func_from_cache
 
     def remove_cache(self):
@@ -203,14 +209,12 @@ class TupleProvider:
         self.remove_cache()
         batch_count = 0
         for request in self.request_cache:
-            func_name, args, kwargs = request
+            func_name, args, kwargs = request  # Unpack full request
             result = object.__getattribute__(self, func_name)(*args, **kwargs)
 
-            hashable_kwargs = frozenset(kwargs.items())
-            hashable_request = (func_name, args, hashable_kwargs)
+            hashable_request = (func_name, args)  # Ignore kwargs for cache key
+            # curl.log(f"Saving to cache with key: {hashable_request}")
             if hashable_request not in self.tuple_cache.keys():
-                # self.tuple_cache[hashable_request].append(result)
-            # else:
                 self.tuple_cache[hashable_request] = result
             # Save in batches to avoid excessive memory use
             batch_count += 1
@@ -223,7 +227,6 @@ class TupleProvider:
             self._save_tuples()
         # Finally, save the requests.
         self._save_requests()
-
 
     def generate_additive_triple(self, size0, size1, op, device=None, *args, **kwargs):
         """Generate multiplicative triples of given sizes"""

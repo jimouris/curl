@@ -25,8 +25,13 @@ TTP_FUNCTIONS = ["additive", "square", "binary", "wraps", "B2A", "generate_one_h
 class TrustedThirdParty(TupleProvider):
     NAME = "TTP"
 
+    def __init__(self, device=None):
+        super().__init__(device=device)
+
     def generate_additive_triple(self, size0, size1, op, device=None, *args, **kwargs):
         """Generate multiplicative triples of given sizes"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         a = generate_random_ring_element(size0, generator=generator, device=device)
@@ -49,6 +54,8 @@ class TrustedThirdParty(TupleProvider):
 
     def square(self, size, device=None):
         """Generate square double of given size"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         r = generate_random_ring_element(size, generator=generator, device=device)
@@ -64,6 +71,8 @@ class TrustedThirdParty(TupleProvider):
 
     def generate_binary_triple(self, size0, size1, device=None):
         """Generate binary triples of given size"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         a = generate_kbit_random_tensor(size0, generator=generator, device=device)
@@ -84,6 +93,8 @@ class TrustedThirdParty(TupleProvider):
 
     def wrap_rng(self, size, device=None):
         """Generate random shared tensor of given size and sharing of its wraps"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         r = generate_random_ring_element(size, generator=generator, device=device)
@@ -101,6 +112,8 @@ class TrustedThirdParty(TupleProvider):
 
     def B2A_rng(self, size, device=None):
         """Generate random bit tensor as arithmetic and binary shared tensors"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         # generate random bit
@@ -120,6 +133,8 @@ class TrustedThirdParty(TupleProvider):
 
     def generate_one_hot(self, tensor_size, lut_size, device=None):
         """Generate lookup table vectors of given sizes"""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         r = generate_random_ring_element(tensor_size, generator=generator, device=device)
@@ -134,11 +149,15 @@ class TrustedThirdParty(TupleProvider):
         return r, one_hot_r
 
     def generate_permutation(self, tensor_size, device=None):
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_permutation_generator(device=device)
         return generate_permutation(tensor_size, generator=generator, device=device)
 
     def egk_trunc_pr_rng(self, size, l, m, device=None):
         """Generate random values for the [EGK+20] probabilistic truncation protocol."""
+        if device is None:
+            device = self.device
         generator = TTPClient.get().get_generator(device=device)
 
         _ = generate_random_ring_element(size, generator=generator, device=device)
@@ -196,11 +215,12 @@ class TTPClient:
             ).wait()
             dist.barrier(group=self.ttp_group)
 
+            rank = comm.get().get_rank()
+
             self.generator = torch.Generator(device="cpu")
             self.generator.manual_seed(seed.item())
-
             if torch.cuda.is_available():
-                self.generator_cuda = torch.Generator(device="cuda")
+                self.generator_cuda = torch.Generator(device=f"cuda:{rank}")
                 self.generator_cuda.manual_seed(seed.item())
             else:
                 self.generator_cuda = None
@@ -213,9 +233,8 @@ class TTPClient:
 
             self.permutation_generator = torch.Generator(device="cpu")
             self.permutation_generator.manual_seed(seed.item())
-
             if torch.cuda.is_available():
-                self.permutation_generator_cuda = torch.Generator(device="cuda")
+                self.permutation_generator_cuda = torch.Generator(device=f"cuda:{rank}")
                 self.permutation_generator_cuda.manual_seed(seed.item())
             else:
                 self.permutation_generator_cuda = None
@@ -319,11 +338,11 @@ class TTPServer:
                     return
 
                 function = message["function"]
-                device = message["device"]
+                # device = message["device"]
                 args = message["args"]
                 kwargs = message["kwargs"]
 
-                self.device = device
+                # self.device = device
 
                 result = getattr(self, function)(*args, **kwargs)
 
@@ -342,15 +361,15 @@ class TTPServer:
             dist.isend(tensor=seeds[i], dst=i, group=self.ttp_group) for i in range(ws)
         ]
         self.generators = [torch.Generator(device="cpu") for _ in range(ws)]
-        self.generators_cuda = [
-            (torch.Generator(device="cuda") if torch.cuda.is_available() else None)
-            for _ in range(ws)
-        ]
+        # self.generators_cuda = [
+        #     (torch.Generator(device="cuda") if torch.cuda.is_available() else None)
+        #     for _ in range(ws)
+        # ]
 
         for i in range(ws):
             self.generators[i].manual_seed(seeds[i].item())
-            if torch.cuda.is_available():
-                self.generators_cuda[i].manual_seed(seeds[i].item())
+            # if torch.cuda.is_available():
+            #     self.generators_cuda[i].manual_seed(seeds[i].item())
             reqs[i].wait()
 
         dist.barrier(group=self.ttp_group)
@@ -367,10 +386,10 @@ class TTPServer:
         if device is None:
             device = "cpu"
         device = torch.device(device)
-        if device.type == "cuda":
-            return self.generators_cuda
-        else:
-            return self.generators
+        # if device.type == "cuda":
+        #     return self.generators_cuda
+        # else:
+        return self.generators
 
     def _get_additive_PRSS(self, size, remove_rank=False):
         """
