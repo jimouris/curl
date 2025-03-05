@@ -82,16 +82,17 @@ def init(config_file=None, party_name=None, device=None):
                 exit()
 
     # Setup seeds for Random Number Generation
+    rank = comm.get().get_rank()
     if comm.get().get_rank() < comm.get().get_world_size():
-        _setup_prng()
+        _setup_prng(device)
         if curl.mpc.ttp_required():
-            curl.mpc.provider.ttp_provider.TTPClient._init()
+            curl.mpc.provider.ttp_provider.TTPClient._init(device)
 
         # Initialize the LUTs for the computing parties, if needed
         for k, v in cfg.config.functions.items():
             v = dict(v)
             if "haar" in v['method'] or "bior" in v['method']:
-                logging.info(f"[Party {comm.get().get_rank()}] Initializing LUTs in {device}")
+                logging.info(f"[Party {rank}] Initializing LUTs in {device}")
                 curl.common.functions.approximations.LookupTables(device=device)
                 break
 
@@ -99,9 +100,9 @@ def init(config_file=None, party_name=None, device=None):
             curl.evaluator.EvaluatorClient._init()
 
 
-def init_thread(rank, world_size, evaluator_size=0):
+def init_thread(rank, world_size, evaluator_size=0, device="cpu"):
     comm._init(use_threads=True, rank=rank, world_size=world_size, evaluator_size=evaluator_size)
-    _setup_prng()
+    _setup_prng(device)
 
 
 def uninit():
@@ -183,7 +184,7 @@ def is_encrypted_tensor(obj):
     return isinstance(obj, CrypTensor)
 
 
-def _setup_prng():
+def _setup_prng(device):
     """
     Generate shared random seeds to generate pseudo-random sharings of
     zero. For each device, we generator four random seeds:
@@ -210,15 +211,9 @@ def _setup_prng():
             device=torch.device("cpu")
         )
 
-    if torch.cuda.is_available():
-        cuda_device_names = ["cuda"]
-        for i in range(torch.cuda.device_count()):
-            cuda_device_names.append(f"cuda:{i}")
-        cuda_devices = [torch.device(name) for name in cuda_device_names]
-
-        for device in cuda_devices:
-            for key in generators.keys():
-                generators[key][device] = torch.Generator(device=device)
+    if "cuda" in device.type:
+        for key in generators.keys():
+            generators[key][device] = torch.Generator(device=torch.device(device))
 
     # Generate random seeds for Generators
     # NOTE: Chosen seed can be any number, but we choose as a random 64-bit

@@ -186,8 +186,8 @@ class TrustedThirdParty(TupleProvider):
 
 
     @staticmethod
-    def _init():
-        TTPClient._init()
+    def _init(device):
+        TTPClient._init(device)
 
     @staticmethod
     def uninit():
@@ -200,14 +200,14 @@ class TTPClient:
     class __TTPClient:
         """Singleton class"""
 
-        def __init__(self):
+        def __init__(self, device):
             # Initialize connection
             self.ttp_group = comm.get().ttp_group
             self.comm_group = comm.get().ttp_comm_group
-            self._setup_generators()
-            logging.info(f"[Party {comm.get().get_rank()}] TTP Client initialized")
+            self._setup_generators(device)
+            logging.info(f"[Party {comm.get().get_rank()}] TTP Client initialized using device: {device}")
 
-        def _setup_generators(self):
+        def _setup_generators(self, device):
             """Setup RNG generator shared between each party (client) and the TTPServer"""
             seed = torch.empty(size=(), dtype=torch.long)
             dist.irecv(
@@ -219,8 +219,8 @@ class TTPClient:
 
             self.generator = torch.Generator(device="cpu")
             self.generator.manual_seed(seed.item())
-            if torch.cuda.is_available():
-                self.generator_cuda = torch.Generator(device=f"cuda:{rank}")
+            if "cuda" in device.type:
+                self.generator_cuda = torch.Generator(device=device)
                 self.generator_cuda.manual_seed(seed.item())
             else:
                 self.generator_cuda = None
@@ -233,8 +233,8 @@ class TTPClient:
 
             self.permutation_generator = torch.Generator(device="cpu")
             self.permutation_generator.manual_seed(seed.item())
-            if torch.cuda.is_available():
-                self.permutation_generator_cuda = torch.Generator(device=f"cuda:{rank}")
+            if "cuda" in device.type:
+                self.permutation_generator_cuda = torch.Generator(device=device)
                 self.permutation_generator_cuda.manual_seed(seed.item())
             else:
                 self.permutation_generator_cuda = None
@@ -243,7 +243,7 @@ class TTPClient:
             if device is None:
                 device = "cpu"
             device = torch.device(device)
-            if device.type == "cuda":
+            if "cuda" in device.type:
                 return self.generator_cuda
             else:
                 return self.generator
@@ -252,7 +252,7 @@ class TTPClient:
             if device is None:
                 device = "cpu"
             device = torch.device(device)
-            if device.type == "cuda":
+            if "cuda" in device.type:
                 return self.permutation_generator_cuda
             else:
                 return self.permutation_generator
@@ -280,10 +280,10 @@ class TTPClient:
             return result
 
     @staticmethod
-    def _init():
+    def _init(device):
         """Initializes a Trusted Third Party client that sends requests"""
         if TTPClient.__instance is None:
-            TTPClient.__instance = TTPClient.__TTPClient()
+            TTPClient.__instance = TTPClient.__TTPClient(device)
 
     @staticmethod
     def uninit():
@@ -338,11 +338,8 @@ class TTPServer:
                     return
 
                 function = message["function"]
-                # device = message["device"]
                 args = message["args"]
                 kwargs = message["kwargs"]
-
-                # self.device = device
 
                 result = getattr(self, function)(*args, **kwargs)
 
@@ -361,15 +358,9 @@ class TTPServer:
             dist.isend(tensor=seeds[i], dst=i, group=self.ttp_group) for i in range(ws)
         ]
         self.generators = [torch.Generator(device="cpu") for _ in range(ws)]
-        # self.generators_cuda = [
-        #     (torch.Generator(device="cuda") if torch.cuda.is_available() else None)
-        #     for _ in range(ws)
-        # ]
 
         for i in range(ws):
             self.generators[i].manual_seed(seeds[i].item())
-            # if torch.cuda.is_available():
-            #     self.generators_cuda[i].manual_seed(seeds[i].item())
             reqs[i].wait()
 
         dist.barrier(group=self.ttp_group)
@@ -386,9 +377,6 @@ class TTPServer:
         if device is None:
             device = "cpu"
         device = torch.device(device)
-        # if device.type == "cuda":
-        #     return self.generators_cuda
-        # else:
         return self.generators
 
     def _get_additive_PRSS(self, size, remove_rank=False):
