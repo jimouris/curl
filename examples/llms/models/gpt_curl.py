@@ -52,9 +52,9 @@ class Attention(nn.Module):
 class GPTMLP(nn.Module):
     def __init__(self, embed_dim):
         super(GPTMLP, self).__init__()
-        self.c_fc = nn.AttentionLinear(embed_dim, embed_dim * 4)
+        self.c_fc = GPTLinear(embed_dim, embed_dim * 4)
         self.gelu = nn.GELU()
-        self.c_proj = nn.AttentionLinear(embed_dim * 4, embed_dim)
+        self.c_proj = GPTLinear(embed_dim * 4, embed_dim)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -68,8 +68,8 @@ class GPTBlock(nn.Module):
         super(GPTBlock, self).__init__()
         self.ln_1 = nn.LayerNorm(embed_dim)
         self.ln_2 = nn.LayerNorm(embed_dim)
-        self.attn = nn.Attention(embed_dim, num_heads)
-        self.mlp = Transformer.Full(embed_dim)
+        self.attn = Attention(embed_dim, num_heads)
+        self.mlp = GPTMLP(embed_dim)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -85,7 +85,7 @@ class Transformer(nn.Module):
         self.wpe = nn.Embedding(seq_len, embed_dim)
 
         self.h = nn.Sequential(
-            *[Transformer.Block(embed_dim, num_heads) for _ in range(num_blocks)]
+            *[GPTBlock(embed_dim, num_heads) for _ in range(num_blocks)]
         )
         self.ln_f = nn.LayerNorm(embed_dim)
 

@@ -22,7 +22,7 @@ from examples.multiprocess_launcher import MultiProcessLauncher
 from examples.llms.models.bert_for_sequence_classification import (BertTinyForSequenceClassification,
                                                                    BertBaseForSequenceClassification,
                                                                    BertLargeForSequenceClassification)
-from examples.llms.models.modern_bert import ModernBertForTokenClassification
+from examples.llms.models.modern_bert import ModernBertForTokenClassification, ModernBertLargeForTokenClassification
 
 
 def load_tsv(task, tokenizer, device, delimiter='\t'):
@@ -76,11 +76,15 @@ def get_bert_model(model, task, device):
             elif task == "sst2":
                 path = "mrm8488/ModernBERT-base-ft-sst2"
             encyrpted_model = ModernBertForTokenClassification
+        case "ModernBertLarge":
+            # path = "tasksource/ModernBERT-large-nli"
+            path = "makiart/modernbert-large-ft-all-nli"
+            encyrpted_model = ModernBertLargeForTokenClassification
         case _:
             raise ValueError("Unknown model type")
 
     bert_tokenizer = AutoTokenizer.from_pretrained(path)
-    if model == "ModernBert":
+    if model in ("ModernBert", "ModernBertLarge"):
         bert_model = ModernBertForSequenceClassification.from_pretrained(path)
     else:
         bert_model = BertForSequenceClassification.from_pretrained(path)
@@ -92,13 +96,13 @@ def get_bert_model(model, task, device):
 
     # Increase the vocabulary size to the next power of two.
     # This is used for correctness in the 'evaluate_embed' function.
-    if model == "ModernBert":
+    if model in ("ModernBert", "ModernBertLarge"):
         weight = curl_bert_model.model.embeddings.tok_embeddings.weight
     else:
         weight = curl_bert_model.bert.embeddings.word_embeddings.weight
     new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
     append = torch.zeros(new_size, weight.size()[1])
-    if model == "ModernBert":
+    if model in ("ModernBert", "ModernBertLarge"):
         curl_bert_model.model.embeddings.tok_embeddings.weight = torch.cat((weight, append))
     else:
         curl_bert_model.bert.embeddings.word_embeddings.weight = torch.cat((weight, append))
@@ -131,7 +135,7 @@ def run_accuracy_test(model, curl_model, data, targets, total, device):
         # Prints
         print(f"{result=}, {result_enc=}")
         print(f"{label=}, time={time.time()-now:.4}, count={count.item()}, count_enc={count_enc.item()}")
-        print(f"exaccuracy={count/(label+1):.4}, accuracy_enc={count_enc/(label+1):.4}")
+        print(f"accuracy={count/(label+1):.4}, accuracy_enc={count_enc/(label+1):.4}")
     return count / total, count_enc / total
 
 
@@ -195,7 +199,7 @@ def get_args():
         action="store_true",
         help="Print communication statistics",
     )
-    models = ['BertTiny', 'BertBase', 'BertLarge', 'ModernBert']
+    models = ['BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'ModernBertLarge']
     parser.add_argument(
         "--model",
         choices=models,

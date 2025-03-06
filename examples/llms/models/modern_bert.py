@@ -155,10 +155,7 @@ class ModernBertModel(nn.Module):
         self.final_norm = nn.LayerNorm(hidden_size, bias=False)
 
     def forward(self, input_ids, input_embeds=None):
-        if self.full:
-            hidden_states = self.embeddings(input_ids, input_embeds)
-        else:
-            hidden_states = input_ids
+        hidden_states = self.embeddings(input_ids, input_embeds) if self.full else input_ids
         for layer in self.layers:
             hidden_states = layer(hidden_states)
         hidden_states = self.final_norm(hidden_states)
@@ -179,16 +176,17 @@ class ModernBertPredictionHead(nn.Module):
 
 
 class ModernBertForSequenceClassification(nn.Module):
-    def __init__(self, vocab_size, hidden_size, intermediate_size, seq_len, n_heads, n_layers):
+    def __init__(self, vocab_size, hidden_size, intermediate_size, seq_len, n_heads, n_layers, classes=2):
         super().__init__()
         self.model = ModernBertModel(vocab_size, hidden_size, intermediate_size, seq_len, n_heads, n_layers)
         self.head = ModernBertPredictionHead(hidden_size)
-        self.classifier = nn.Linear(hidden_size, 2)
+        self.classifier = nn.Linear(hidden_size, classes)
 
     def forward(self, input_ids, token_type_ids=None):
         pooled_out = self.model(input_ids, token_type_ids)
         out = self.head(pooled_out)
         return self.classifier(out)
+
 
 class ModernBert(ModernBertModel):
     def __init__(self, seq_len, full):
@@ -198,7 +196,6 @@ class ModernBertForTokenClassification(ModernBertForSequenceClassification):
     def __init__(self):
         super().__init__(vocab_size=50368, hidden_size=768, intermediate_size=1152, seq_len=8192, n_heads=12, n_layers=22)
 
-
 class ModernBertLargeForTokenClassification(ModernBertForSequenceClassification):
     def __init__(self):
-        super().__init__(vocab_size=50368, hidden_size=1024, intermediate_size=1024, seq_len=8192, n_heads=16, n_layers=24)
+        super().__init__(vocab_size=50368, hidden_size=1024, intermediate_size=2624, seq_len=8192, n_heads=16, n_layers=24, classes=2)

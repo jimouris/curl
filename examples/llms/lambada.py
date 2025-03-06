@@ -8,11 +8,12 @@ import argparse
 import codecs
 import logging
 import os
+import time
 import torch
 
 from datasets import load_dataset, load_from_disk
 from math import ceil, log2
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, GPTNeoForCausalLM
 from tqdm import tqdm
 
 import curl
@@ -44,26 +45,35 @@ def load_data(mode):
             raise ValueError(f"Invalid data mode {mode}")
     return dataset
 
-def get_gpt_model(path, mode):
+def get_gpt_model(path, mode, device):
     # Load pre-trained GPT-2 tokenizer and model
     tokenizer = GPT2Tokenizer.from_pretrained(path)
-    model = GPT2LMHeadModel.from_pretrained(path)
+    if mode in ("Neo", "NeoSecret"):
+        model = GPTNeoForCausalLM.from_pretrained(path)
+    else:
+        model = GPT2LMHeadModel.from_pretrained(path)
     model.eval()
+    model.to(device)
 
     match mode:
         case "Clear":
-            from examples.llms.models.gpt_clear import GPT2LMHead
+            from examples.llms.models.gpt_clear import GPT2LMHead as GPTLMHead
         case "Fixed":
-            from examples.llms.models.gpt_fixed import GPT2LMHead
+            from examples.llms.models.gpt_fixed import GPT2LMHead as GPTLMHead
         case "Secret":
-            from examples.llms.models.gpt_curl import GPT2LMHead
+            from examples.llms.models.gpt_curl import GPT2LMHead as GPTLMHead
+        case "Neo":
+            from examples.llms.models.gpt_neo import GPTNeoLMHead as GPTLMHead
+        case "NeoSecret":
+            from examples.llms.models.gpt_neo_curl import GPTNeoLMHead as GPTLMHead
         case _:
             raise ValueError(f"Invalid model mode {mode}")
 
-    curl_model = GPT2LMHead()
+    curl_model = GPTLMHead()
     curl_model.load_state_dict(model.state_dict())
+    curl_model.to(device)
 
-    if mode == "Secret":
+    if mode in ("Secret", "NeoSecret"):
         # Increase the vocabulary size to the next power of two.
         # This is used for correctness in the 'evaluate_embed' function.
         weight = curl_model.transformer.wte.weight
@@ -99,14 +109,17 @@ def get_predictions(tokenizer, predictions, target_word):
     # Compare with the actual last word
     return predicted_word.lower() == target_word.lower()
 
-def evaluate_lambada(mode, data="tsv"):
-    tokenizer, model, curl_model = get_gpt_model("gpt2", mode)
+def evaluate_lambada(mode, data="tsv", device=torch.device("cpu"), secret=False):
+    path = "EleutherAI/gpt-neo-1.3B" if mode in ("Neo", "NeoSecret") else "gpt2"
+    tokenizer, model, curl_model = get_gpt_model(path, mode, device)
     dataset = load_data(data)
 
     correct_predictions = 0
     curl_correct_predictions = 0
     total_predictions = 0
+    now = time.time()
 
+    print("Starting")
     for example in tqdm(dataset):
         total_predictions += 1
 
@@ -120,39 +133,41 @@ def evaluate_lambada(mode, data="tsv"):
         input_ids = inputs['input_ids']
 
         # Get model predictions
-        with torch.no_grad():
-            outputs = model(input_ids)
-            predictions = outputs.logits
-        correct_predictions += get_predictions(tokenizer, predictions, target_word)
+        if not secret:
+            with torch.no_grad():
+                outputs = model(input_ids.to(device))
+                predictions = outputs.logits
+            correct_predictions += get_predictions(tokenizer, predictions, target_word)
 
-        if mode == "Secret":
-            curl_outputs = curl_model(curl.cryptensor(input_ids, precision=0))
+        if mode in ("Secret", "NeoSecret"):
+            curl_outputs = curl_model(curl.cryptensor(input_ids, device=device, precision=0))
             curl_predictions = curl_outputs.get_plain_text()
         else:
-            curl_predictions = curl_model(input_ids)
+            curl_predictions = curl_model(input_ids.to(device))
         curl_correct_predictions += get_predictions(tokenizer, curl_predictions, target_word)
 
         print(f'LAMBADA Torch Accuracy: {correct_predictions / total_predictions:.4f} ({correct_predictions})')
         print(f'LAMBADA Curl  Accuracy: {curl_correct_predictions / total_predictions:.4f} ({curl_correct_predictions})')
+        print(f'time={time.time()-now}')
 
     accuracy = correct_predictions / total_predictions
     curl_accuracy = curl_correct_predictions / total_predictions
     return accuracy, curl_accuracy
 
 
-def run_lambada(cfg_file, communication=False, device=None, mode="Clear", data="tsv"):
+def run_lambada(cfg_file, communication=False, device=None, mode="Clear", data="tsv", secret=False):
     # First cold run.
-    if mode == "Secret":
+    if mode in ("Secret", "NeoSecret"):
         curl.init(cfg_file, device=device)
         if communication:
             comm.get().set_verbosity(True)
 
-    base_accuracy, curl_accuracy = evaluate_lambada(mode, data)
+    base_accuracy, curl_accuracy = evaluate_lambada(mode, data, device, secret)
 
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
-    if mode == "Secret" and communication:
+    if mode in ("Secret", "NeoSecret") and communication:
         comm.get().print_communication_stats()
         exit(0)
 
@@ -201,7 +216,7 @@ def get_args():
         "-d",
         required=False,
         default="cpu",
-        help="the device to run the benchmarks",
+        help="The device to run the benchmarks",
     )
     parser.add_argument(
         "--multi-gpu",
@@ -209,9 +224,9 @@ def get_args():
         required=False,
         default=False,
         action="store_true",
-        help="use different gpu for each party. Will override --device if selected",
+        help="Use different gpu for each party. Will override --device if selected",
     )
-    models=["Clear", "Fixed", "Secret"]
+    models=["Clear", "Fixed", "Secret", "Neo", "NeoSecret"]
     parser.add_argument(
         "--model",
         choices=models,
@@ -222,9 +237,14 @@ def get_args():
     parser.add_argument(
         "--data",
         choices=data,
-        required=False,
         default="tsv",
         help="Choose a data format from the following options: {}".format(data),
+    )
+    parser.add_argument(
+        "--secret",
+        default=False,
+        action="store_true",
+        help="Do not run plaintext model",
     )
     args = parser.parse_args()
     return args
@@ -252,7 +272,7 @@ def _run_experiment(args):
     logging.getLogger().setLevel(level)
 
     cfg_file = get_config(args)
-    run_lambada(cfg_file, args.communication, args.device, args.model, args.data)
+    run_lambada(cfg_file, args.communication, args.device, args.model, args.data, args.secret)
 
     print('Done')
 

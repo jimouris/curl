@@ -4,7 +4,7 @@ import codecs
 import torch
 
 from datasets import load_dataset, load_from_disk
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import GPT2Tokenizer, GPTNeoForCausalLM
 from tqdm import tqdm
 
 
@@ -34,7 +34,7 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
                  'if', 'theirs', 'my', 'against',  'by', 'doing', 'it', 'how', 'further', 'was', 'here', 'than',
                  ',', '.', '...', '?', '!', "'", "''", "", '?"', "?'", ',"', '."', "'s", ':', '"', '-', '�', '—'}
 
-    model = GPT2LMHeadModel.from_pretrained(model_name)
+    model = GPTNeoForCausalLM.from_pretrained(model_name)
     for name, param in model.named_parameters():
         print(f"{name} {param.shape}")
     model.eval()
@@ -101,8 +101,6 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
         else:
             print('Incorrect')
         total_predictions += 1
-        # if total_predictions >= 10:
-        #     break
         print(f'LAMBADA Accuracy: {correct_predictions / total_predictions:.4f}')
 
     accuracy = correct_predictions / total_predictions
@@ -110,4 +108,5 @@ def evaluate_gpt2_on_lambada(model_name='gpt2', data='tsv'):
 
 
 if __name__ == "__main__":
-    evaluate_gpt2_on_lambada()
+    evaluate_gpt2_on_lambada("gpt2")
+    # evaluate_gpt2_on_lambada("EleutherAI/gpt-neo-1.3B")
