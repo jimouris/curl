@@ -36,7 +36,7 @@ class GPTAttention(nn.Module):
         attn = query.matmul(key) / query.size(-1) ** 0.5
         if mask:
             attn = attn * torch.tril(torch.ones_like(attn, dtype=torch.long), diagonal=0)
-            attn = attn + -2**47 * torch.triu(torch.ones_like(attn, dtype=torch.long), diagonal=1)
+            attn = attn + -2**15 * torch.triu(torch.ones_like(attn, dtype=torch.long), diagonal=1)
         attn = attn.softmax(dim=-1)
 
         y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)

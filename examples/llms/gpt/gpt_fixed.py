@@ -45,7 +45,6 @@ class GPTAttention(nn.Module):
         key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
         value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
 
-        # attn = query.matmul(key) / query.size(-1) ** 0.5
         query = to_fixed_point(query, PRECISION)
         key = to_fixed_point(key, PRECISION)
         attn = query.matmul(key)

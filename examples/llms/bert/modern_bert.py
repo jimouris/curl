@@ -107,7 +107,10 @@ class ModernBertAttention(nn.Module):
                 (distance <= self.local_attention // 2).unsqueeze(0).unsqueeze(0).to(attn.device)
             )
             # Combine with existing mask
-            attn.share = attn.share.masked_fill(window_mask.logical_not(), -2**46)
+            if attn.device.type == "cuda":
+                attn.share._tensor = attn.share.tensor().masked_fill(window_mask.logical_not(), -2**46)
+            else:
+                attn.share = attn.share.masked_fill(window_mask.logical_not(), -2**46)
 
         attn = attn.softmax(dim=-1)
 

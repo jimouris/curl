@@ -1,5 +1,3 @@
-from string import punctuation
-
 import codecs
 import torch
 

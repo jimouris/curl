@@ -281,12 +281,8 @@ def main():
     tokenizer = LlamaTokenizer(PATH)
     model = Llama(PATH)
     model.load_weights(PATH)
-    prompt = (
-        "the answer to the ultimate question of life, the universe, and everything is "
-    )
-    prompt = (
-        "Once upon a time, there was a girl named Little Red Riding Hood "
-    )
+    prompt = "the answer to the ultimate question of life, the universe, and everything is "
+    prompt = "Once upon a time, there was a girl named Little Red Riding Hood "
     tokens = tokenizer.tokenize(prompt)
     print("TOKENS: ", tokens)
     print("DECODED TOKENS: ", tokenizer.decode(tokens.tolist()))

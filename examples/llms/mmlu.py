@@ -17,7 +17,7 @@ import curl
 import curl.communicator as comm
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.models.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
+from examples.llms.bert.bert_for_sequence_classification import BertBaseForSequenceClassification, BertTinyForSequenceClassification
 
 from datasets import load_dataset
 from tqdm import tqdm

@@ -28,7 +28,7 @@ class GPTAttention(nn.Module):
     def _split_heads(self, x):
         new_shape = x.size()[:-1] + (self.num_heads, self.search_dim)
         x = x.view(new_shape)
-        return x.permute(0, 2, 1, 3)
+        return x.permute((0, 2, 1, 3))
 
     def forward(self, x, mask=True):
         batch_size = x.shape[0]
@@ -54,9 +54,12 @@ class GPTAttention(nn.Module):
                     (distance <= 128).unsqueeze(0).unsqueeze(0).to(attn.device)
                 )
                 # Combine with existing mask
-                attn = attn.masked_fill(window_mask.logical_not(), -2**46)
-            attn = attn * torch.tril(torch.ones_like(attn, dtype=torch.long), diagonal=0)
-            attn = attn + -2**46 * torch.triu(torch.ones_like(attn, dtype=torch.long), diagonal=1)
+                if attn.device.type == "cuda":
+                    attn.share._tensor = attn.share.tensor().masked_fill(window_mask.logical_not(), -2**46)
+                else:
+                    attn.share = attn.share.masked_fill(window_mask.logical_not(), -2**46)
+            attn = attn * torch.tril(torch.ones_like(attn.share, dtype=torch.long), diagonal=0)
+            attn = attn + -2**46 * torch.triu(torch.ones_like(attn.share, dtype=torch.long), diagonal=1)
         attn = attn.softmax(dim=-1)
 
         y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)

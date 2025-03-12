@@ -137,15 +137,7 @@ class MultiProcessLauncher:
     def join(self):
         for process in self.processes:
             process.join()
-            if (
-                process.exitcode == 0
-            ):
-                print(f"{process.name} has non-zero exit code {process.exitcode}")
-        for process in self.eval_processes:
-            process.join()
-            if (
-                process.exitcode == 0
-            ):
+            if process.exitcode != 0:
                 print(f"{process.name} has non-zero exit code {process.exitcode}")
 
     def terminate(self):

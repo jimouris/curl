@@ -53,10 +53,10 @@ class LLMs:
     """
 
     def __init__(self, model, tensor_size, device="cpu", full=True):
-        from examples.llms.models.gpt import GPT2, GPTNeo
-        from examples.llms.models.bert import BertTiny, BertBase, BertLarge
-        from examples.llms.models.modern_bert import ModernBert
-        from examples.llms.llama import Llama1B
+        from examples.llms.gpt.gpt import GPT2, GPTNeo
+        from examples.llms.bert.bert import BertTiny, BertBase, BertLarge
+        from examples.llms.bert.modern_bert import ModernBert
+        from examples.llms.models.llama import Llama1B
 
 
         all_models = {
@@ -95,7 +95,7 @@ class LLMs:
         return output
 
     def get_runtimes(self):
-        from examples.llms.llama import Llama1B
+        from examples.llms.models.llama import Llama1B
         """Returns plain text and curl runtimes"""
         runtimes_enc = []
         for llm in self.models:

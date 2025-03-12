@@ -57,15 +57,15 @@ def get_gpt_model(path, mode, device):
 
     match mode:
         case "Clear":
-            from examples.llms.models.gpt_clear import GPT2LMHead as GPTLMHead
+            from examples.llms.gpt.gpt_clear import GPT2LMHead as GPTLMHead
         case "Fixed":
-            from examples.llms.models.gpt_fixed import GPT2LMHead as GPTLMHead
+            from examples.llms.gpt.gpt_fixed import GPT2LMHead as GPTLMHead
         case "Secret":
-            from examples.llms.models.gpt_curl import GPT2LMHead as GPTLMHead
+            from examples.llms.gpt.gpt_curl import GPT2LMHead as GPTLMHead
         case "Neo":
-            from examples.llms.models.gpt_neo import GPTNeoLMHead as GPTLMHead
+            from examples.llms.gpt.gpt_neo import GPTNeoLMHead as GPTLMHead
         case "NeoSecret":
-            from examples.llms.models.gpt_neo_curl import GPTNeoLMHead as GPTLMHead
+            from examples.llms.gpt.gpt_neo_curl import GPTNeoLMHead as GPTLMHead
         case _:
             raise ValueError(f"Invalid model mode {mode}")
 
@@ -78,7 +78,7 @@ def get_gpt_model(path, mode, device):
         # This is used for correctness in the 'evaluate_embed' function.
         weight = curl_model.transformer.wte.weight
         new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
-        append = torch.zeros(new_size, weight.size()[1])
+        append = torch.zeros(new_size, weight.size()[1], device=weight.device)
         curl_model.transformer.wte.weight = torch.cat((weight, append))
         curl_model.encrypt(src=0)
     return tokenizer, model, curl_model
@@ -119,7 +119,6 @@ def evaluate_lambada(mode, data="tsv", device=torch.device("cpu"), secret=False)
     total_predictions = 0
     now = time.time()
 
-    print("Starting")
     for example in tqdm(dataset):
         total_predictions += 1
 

@@ -19,10 +19,10 @@ import curl.communicator as comm
 
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.models.bert_for_sequence_classification import (BertTinyForSequenceClassification,
-                                                                   BertBaseForSequenceClassification,
-                                                                   BertLargeForSequenceClassification)
-from examples.llms.models.modern_bert import ModernBertForTokenClassification, ModernBertLargeForTokenClassification
+from examples.llms.bert.bert_for_sequence_classification import (BertTinyForSequenceClassification,
+                                                                 BertBaseForSequenceClassification,
+                                                                 BertLargeForSequenceClassification)
+from examples.llms.bert.modern_bert import ModernBertForTokenClassification, ModernBertLargeForTokenClassification
 
 
 def load_tsv(task, tokenizer, device, delimiter='\t'):
