@@ -57,6 +57,7 @@ class EvaluatorClient:
 
             # Scatter: Divide data into chunks for workers
             chunks = tensor.chunk(evaluators_size)
+            # chunks = list(chunks) + [curl.cryptensor([]) for _ in range(evaluators_size - len(chunks))]
             if mpc_party_rank == 0:
                 message = {
                     "function": func_name,
@@ -68,17 +69,11 @@ class EvaluatorClient:
                     communicator.send_obj(message, evaluator_rank, self.eval_comm_group)
 
             # Process each split asynchronously
-            for i in range(evaluators_size):
-                evaluator_rank = world_size + i
-                logging.debug(f"[Party {mpc_party_rank}] Sending chunk to Evaluator [{evaluator_rank}]. Group: [{mpc_party_rank}][{i}]")
-                communicator.broadcast(chunks[i].share, mpc_party_rank, self.eval_groups[mpc_party_rank][i])
+            communicator.broadcast_parallel(chunks, [mpc_party_rank]*len(chunks), self.eval_groups[mpc_party_rank])
 
             # Initialize local results with the correct split sizes
             results = [torch.empty_like(chunks[i]._tensor.share, device=tensor.device) for i in range(evaluators_size)]
-            for i in range(evaluators_size):
-                evaluator_rank = world_size + i
-                logging.debug(f"[Party {mpc_party_rank}] Receiving from Evaluator [{evaluator_rank}]")
-                communicator.broadcast(results[i], evaluator_rank, self.eval_groups[mpc_party_rank][i])
+            communicator.broadcast_parallel(results, [world_size + i for i in range(evaluators_size)], self.eval_groups[mpc_party_rank])
 
             tensor.share = torch_cat(results)
             tensor.encoder._precision_bits = cfg.encoder.precision_bits
@@ -114,6 +109,8 @@ class EvaluatorServer:
         self.cfg_file = curl.cfg.get_default_config_path()
         evaluator_rank = comm.get().get_rank()
 
+        torch.set_num_threads(1)
+
         # Initialize connection
         logging.info(f"[Evaluator {evaluator_rank}]: Initializing...")
         env_vars = {}
@@ -125,8 +122,6 @@ class EvaluatorServer:
         self.eval_groups = communicator.eval_groups
 
         # Determine device
-        # if torch.cuda.is_available():
-        # else:
         self.device = "cpu"
         logging.info(f"[Evaluator {evaluator_rank}] Initialized with device: {self.device}")
         evaluator_rank = communicator.get_rank()
@@ -169,9 +164,12 @@ class EvaluatorServer:
 
                 # Receive data from all the MPC nodes
                 results = [torch.empty(tensor_size, dtype=torch.long) for _ in range(world_size)]
-                for mpc_node in range(world_size):
-                    logging.debug(f"Evaluator Server {evaluator_rank - world_size - 1} receiving from MPC party {mpc_node}. Group: [{mpc_node}][{evaluator_rank-world_size-ttp}]")
-                    communicator.broadcast(results[mpc_node], mpc_node, self.eval_groups[mpc_node][evaluator_rank-world_size-ttp])
+                communicator.broadcast_parallel(
+                    results,
+                    [mpc_node for mpc_node in range(world_size)],
+                    [ self.eval_groups[mpc_node][evaluator_rank-world_size-ttp ]
+                    for mpc_node in range(world_size)]
+                )
 
                 # Reconstruct
                 tensor = sum(results)
@@ -189,13 +187,19 @@ class EvaluatorServer:
                     raise ValueError(f"Unsupported function {function}")
 
                 # Secret share the result back to the MPC nodes.
-                result = (result * 2**cfg.encoder.precision_bits).long()
+                results = [(result * 2**cfg.encoder.precision_bits).long()]
                 for mpc_node in range(1, world_size):
-                    share = generate_random_ring_element(result.size(), generator=self.generator)
-                    communicator.broadcast(share, evaluator_rank, self.eval_groups[mpc_node][evaluator_rank-world_size-ttp])
-                    result -= share
-                # Send the last share to MPC party 0.
-                communicator.broadcast(result, evaluator_rank, self.eval_groups[0][evaluator_rank-world_size-ttp])
+                    share = generate_random_ring_element(results[0].size(), generator=self.generator)
+                    results[0] -= share
+                    results.append(share)
+
+                communicator.broadcast_parallel(
+                    results,
+                    [evaluator_rank]*len(results),
+                    [self.eval_groups[mpc_node][evaluator_rank-world_size-ttp]
+                    for mpc_node in range(world_size)]
+                )
+
 
         except RuntimeError as err:
             logging.info("Encountered Runtime error. Evaluator Server shutting down:")

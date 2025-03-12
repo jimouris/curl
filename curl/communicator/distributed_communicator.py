@@ -10,6 +10,7 @@ import os
 import pickle
 import random
 import string
+import threading
 
 import numpy
 import torch
@@ -268,6 +269,33 @@ class DistributedCommunicator(Communicator):
             ), "unbatched input for reduce must be a torch tensor"
             dist.broadcast(input.data, src, group=group)
         return input
+
+    @_logging
+    def broadcast_parallel(self, inputs_list, src_list, groups_list):
+        """Broadcasts the tensor to all parties using parallel threads.
+
+        Args:
+            inputs_list (list): List of tensors to broadcast
+            src_list (list): List of source ranks for each broadcast
+            groups_list (list): List of groups for each broadcast
+        """
+        assert dist.is_initialized(), "initialize the communicator first"
+        assert len(inputs_list) == len(groups_list) == len(src_list), \
+            f"inputs_list {len(inputs_list)}, src_list {len(src_list)} and groups_list {len(groups_list)} must have same length"
+
+        # Create and start threads
+        threads = []
+        for tensor, src, group in zip(inputs_list, src_list, groups_list):
+            thread = threading.Thread(
+                target=dist.broadcast,
+                args=(tensor.data, src, group)
+            )
+            thread.start()
+            threads.append(thread)
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
 
     @_logging
     def barrier(self):
