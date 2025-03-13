@@ -92,7 +92,6 @@ class RMSNorm(nn.Module):
 
 
 class RotatoryEmbedding(nn.Module):
-
     def __init__(self, rope_theta, head_dim, max_seq_len):
         super().__init__()
         self.rope_theta = rope_theta
@@ -192,7 +191,6 @@ class FeedForward(nn.Module):
 
 
 class Transformer(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         self.n_heads = config.n_heads

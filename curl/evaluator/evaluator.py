@@ -57,7 +57,7 @@ class EvaluatorClient:
 
             # Scatter: Divide data into chunks for workers
             chunks = tensor.chunk(evaluators_size)
-            # chunks = list(chunks) + [curl.cryptensor([]) for _ in range(evaluators_size - len(chunks))]
+            chunks = list(chunks) + [curl.cryptensor([]) for _ in range(evaluators_size - len(chunks))]
             if mpc_party_rank == 0:
                 message = {
                     "function": func_name,

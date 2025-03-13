@@ -100,15 +100,9 @@ class LLMs:
         runtimes_enc = []
         for llm in self.models:
             if self.full:
-                if isinstance(llm, Llama1B):
-                    x = (torch.cat([torch.tensor([1]), torch.rand(self.tensor_size[1])]) * 128_000).long().to(self.device)
-                else:
-                    x = torch.rand(self.tensor_size, device=self.device)
+                x = torch.rand(self.tensor_size, device=self.device)
             else:
-                if isinstance(llm, Llama1B):
-                    x = (torch.rand(self.tensor_size[1], llm.config.dim) * llm.config.vocab_size).long().to(self.device)
-                else:
-                    x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
+                x = torch.rand(self.tensor_size[0] * self.tensor_size[1] * llm.embed_dim, device=self.device).reshape(self.tensor_size[0], self.tensor_size[1], llm.embed_dim)
             x_enc = curl.cryptensor(x)
 
             llm.eval()
