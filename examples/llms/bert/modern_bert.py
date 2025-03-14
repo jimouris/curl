@@ -196,6 +196,10 @@ class ModernBert(ModernBertModel):
     def __init__(self, seq_len, full):
         super().__init__(vocab_size=50368, hidden_size=768, intermediate_size=1152, seq_len=seq_len, n_heads=12, n_layers=22, full=full)
 
+class ModernBertLarge(ModernBertModel):
+    def __init__(self, seq_len, full):
+        super().__init__(vocab_size=50368, hidden_size=1024, intermediate_size=2624, seq_len=seq_len, n_heads=16, n_layers=24, full=full)
+
 class ModernBertForTokenClassification(ModernBertForSequenceClassification):
     def __init__(self):
         super().__init__(vocab_size=50368, hidden_size=768, intermediate_size=1152, seq_len=8192, n_heads=12, n_layers=22)

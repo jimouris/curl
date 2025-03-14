@@ -55,7 +55,7 @@ class LLMs:
     def __init__(self, model, tensor_size, device="cpu", full=True):
         from examples.llms.gpt.gpt import GPT2, GPTNeo
         from examples.llms.bert.bert import BertTiny, BertBase, BertLarge
-        from examples.llms.bert.modern_bert import ModernBert
+        from examples.llms.bert.modern_bert import ModernBert, ModernBertLarge
         from examples.llms.models.llama import Llama1B
 
 
@@ -66,6 +66,7 @@ class LLMs:
             'bertbase': BertBase,
             'bertlarge': BertLarge,
             'modernbert': ModernBert,
+            'modernbertlarge': ModernBertLarge,
             'llama': Llama1B
         }
 
