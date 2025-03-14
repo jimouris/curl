@@ -51,7 +51,7 @@ class RotaryEmbedding(nn.Module):
         )
         t = torch.arange(self.max_seq_len, dtype=torch.float)
         freqs = torch.outer(t, freqs)
-        freqs_cis = torch.polar(torch.empty_like(freqs), freqs)
+        freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
         freqs_cis = torch.view_as_real(freqs_cis)
         return freqs_cis
 
@@ -72,9 +72,9 @@ def repeat_kv(x, n_rep):
     if n_rep == 1:
         return x
     return (
-        x[:, :, :, None, :]  # (B, Seq_Len, N_KV_Heads, 1, Head_Dim)
-        .expand(batch_size, seq_len, n_kv_heads, n_rep, head_dim)  # (B, Seq_Len, N_KV_Heads, N_Rep, Head_Dim)
-        .reshape(batch_size, seq_len, n_kv_heads * n_rep, head_dim)  # (B, Seq_Len, N_KV_Heads * N_Rep, Head_Dim)
+        x[:, :, :, None, :]
+        .expand(batch_size, seq_len, n_kv_heads, n_rep, head_dim)
+        .reshape(batch_size, seq_len, n_kv_heads * n_rep, head_dim)
     )
 
 
@@ -135,10 +135,10 @@ class FeedForward(nn.Module):
         self.w3 = nn.Linear(config.dim, hidden_dim, bias=False)
 
     def forward(self, x):
-        swish = self.w1(x).silu() # (B, Seq_Len, Dim) --> (B, Seq_Len, Hidden_Dim)
-        x_v = self.w3(x) # (B, Seq_Len, Dim) --> (B, Seq_Len, Hidden_Dim)
-        x = swish * x_v # (B, Seq_Len, Hidden_Dim) * (B, Seq_Len, Hidden_Dim) --> (B, Seq_Len, Hidden_Dim)
-        x = self.w2(x) # (B, Seq_Len, Hidden_Dim) --> (B, Seq_Len, Dim)
+        swish = self.w1(x).silu()
+        x_v = self.w3(x)
+        x = swish * x_v
+        x = self.w2(x)
         return x
 
 
@@ -163,7 +163,8 @@ class Llama1B(nn.Module):
         super(Llama1B, self).__init__()
         self.full = full
         embed_dim, head_dim = 2048, 32
-        self.config = LlamaConfig(embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0, embed_dim//head_dim, seq_len, True)
+        self.config = LlamaConfig(embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0,
+                                  embed_dim//head_dim, seq_len, True)
         self.layers = nn.ModuleList(
             [Transformer(self.config) for _ in range(self.config.n_layers)]
         )
