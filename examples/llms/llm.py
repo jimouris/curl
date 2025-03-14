@@ -52,7 +52,7 @@ class LLMs:
         tensor_size (int or tuple): size of tensor for benchmarking runtimes
     """
 
-    def __init__(self, model, tensor_size, device="cpu", full=True):
+    def __init__(self, model, tensor_size, device="cpu", full=True, kv_cache=0):
         from examples.llms.gpt.gpt import GPT2, GPTNeo
         from examples.llms.bert.bert import BertTiny, BertBase, BertLarge
         from examples.llms.bert.modern_bert import ModernBert, ModernBertLarge
@@ -74,9 +74,10 @@ class LLMs:
         self.tensor_size = tensor_size
         self.df = None
         self.full = full
+        self.kv_cache = kv_cache
         model = model.lower()
         if model in all_models:
-            m_clear = all_models[model](seq_len=tensor_size[1], full=full)
+            m_clear = all_models[model](seq_len=tensor_size[1], full=full, cache=(kv_cache != 0))
             if hasattr(m_clear, "to"):
                 m_clear = m_clear.to(self.device)
             self.models = [m_clear.encrypt(src=0)]
@@ -90,9 +91,11 @@ class LLMs:
 
     @staticmethod
     @time_me
-    def time_llm(x, model):
+    def time_llm(x, model, kv_cache=0):
         with curl.no_grad():
             output = model(x)
+        for _ in range(kv_cache):
+            output = model(x[:, :1, :])
         return output
 
     def get_runtimes(self):
@@ -108,7 +111,7 @@ class LLMs:
 
             llm.eval()
 
-            runtime_enc, _ = LLMs.time_llm(x_enc, llm)
+            runtime_enc, _ = LLMs.time_llm(x_enc, llm, kv_cache=self.kv_cache)
             runtimes_enc.append(runtime_enc)
 
         return runtimes_enc
@@ -124,7 +127,7 @@ class LLMs:
             }
         )
 
-def run_llm(tensor_size, model, fill_cache=False, communication=False, full=True, device=None):
+def run_llm(tensor_size, model, fill_cache=False, communication=False, full=True, device=None, kv_cache=0):
     rank = comm.get().get_rank()
     logging.info(f"[Party {rank}][Device] running in {device}")
     logging.info(f"[Party {rank}] Tensor size {tensor_size}")
@@ -146,7 +149,7 @@ def run_llm(tensor_size, model, fill_cache=False, communication=False, full=True
     else:
         provider.load_cache()
 
-    benches = LLMs(model, tensor_size, device=device, full=full)
+    benches = LLMs(model, tensor_size, device=device, full=full, kv_cache=kv_cache)
     benches.run()
 
     logging.info(f"[Party {rank}] {benches}")

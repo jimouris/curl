@@ -79,7 +79,7 @@ def repeat_kv(x, n_rep):
 
 
 class Attention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, cache=False):
         super(Attention, self).__init__()
         self.inner_dim = config.dim // config.n_heads
         self.n_heads = config.n_heads
@@ -92,6 +92,11 @@ class Attention(nn.Module):
         self.wo = nn.Linear(config.n_heads * self.inner_dim, config.dim, bias=False)
 
         self.rope = RotaryEmbedding(config.rope_theta, config.head_dim, config.max_seq_len)
+
+        self.cache = cache
+        if cache:
+            self.cache_k = curl.cryptensor(torch.tensor([]))
+            self.cache_v = curl.cryptensor(torch.tensor([]))
 
     def forward(self, x):
         batch_size, seq_len, _ = x.shape
@@ -106,6 +111,13 @@ class Attention(nn.Module):
 
         xq = self.rope(xq)
         xk = self.rope(xk)
+
+        if self.cache:
+            self.cache_k = curl.cat([self.cache_k, xk], dim=1)
+            self.cache_v = curl.cat([self.cache_v, xv], dim=1)
+
+            xk = self.cache_k
+            xv = self.cache_v
 
         keys = repeat_kv(xk, self.n_rep)
         values = repeat_kv(xv, self.n_rep)
@@ -143,10 +155,10 @@ class FeedForward(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, cache=False):
         super(Transformer, self).__init__()
         self.attn_norm = RMSNorm(config.norm_eps, config.dim)
-        self.attention = Attention(config)
+        self.attention = Attention(config, cache)
         self.ffn_norm = RMSNorm(config.norm_eps, config.dim)
         self.ffn = FeedForward(config)
 
@@ -159,14 +171,14 @@ class Transformer(nn.Module):
 
 
 class Llama1B(nn.Module):
-    def __init__(self, seq_len, full=False):
+    def __init__(self, seq_len, full=False, cache=False):
         super(Llama1B, self).__init__()
         self.full = full
         self.embed_dim, self.head_dim = 2048, 32
         self.config = LlamaConfig(self.embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0,
                                   self.embed_dim//self.head_dim, seq_len, True)
         self.layers = nn.ModuleList(
-            [Transformer(self.config) for _ in range(self.config.n_layers)]
+            [Transformer(self.config, cache) for _ in range(self.config.n_layers)]
         )
         if full:
             self.embedding = nn.Embedding(self.config.vocab_size, self.config.dim)

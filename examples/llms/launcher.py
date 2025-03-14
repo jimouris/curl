@@ -81,6 +81,12 @@ def get_args():
         action="store_true",
         help="Skip embeddings and softmax",
     )
+    parser.add_argument(
+        "--kv-cache",
+        type=int,
+        default=0,
+        help="Use key-value cache for this many new tokens",
+    )
     models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'ModernBertLarge', 'Llama']
     parser.add_argument(
         "--model",
@@ -130,7 +136,7 @@ def _run_experiment(args):
     if "RANK" in os.environ and os.environ["RANK"] != "0":
         level = logging.CRITICAL
     logging.getLogger().setLevel(level)
-    run_llm(args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device)
+    run_llm(args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device, args.kv_cache)
 
 
 def main():
