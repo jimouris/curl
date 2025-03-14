@@ -152,6 +152,7 @@ class ModernBertModel(nn.Module):
     def __init__(self, vocab_size, hidden_size, intermediate_size, seq_len, n_heads, n_layers, full=True):
         super().__init__()
         self.full = full
+        self.embed_dim = hidden_size
         self.embeddings = ModernBertEmbeddings(vocab_size, hidden_size)
         self.layers = nn.ModuleList(
             [ModernBertLayer(hidden_size, intermediate_size, n_heads, layer_id) for layer_id in range(n_layers)])
