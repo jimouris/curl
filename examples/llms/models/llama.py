@@ -95,8 +95,8 @@ class Attention(nn.Module):
 
         self.cache = cache
         if cache:
-            self.cache_k = curl.cryptensor(torch.tensor([]))
-            self.cache_v = curl.cryptensor(torch.tensor([]))
+            self.cache_k = nn.Parameter(curl.cryptensor(torch.tensor([])))
+            self.cache_v = nn.Parameter(curl.cryptensor(torch.tensor([])))
 
     def forward(self, x):
         batch_size, seq_len, _ = x.shape
@@ -113,11 +113,11 @@ class Attention(nn.Module):
         xk = self.rope(xk)
 
         if self.cache:
-            self.cache_k = curl.cat([self.cache_k, xk], dim=1)
-            self.cache_v = curl.cat([self.cache_v, xv], dim=1)
+            self.cache_k.data = curl.cat([self.cache_k.data, xk], dim=1)
+            self.cache_v.data = curl.cat([self.cache_v.data, xv], dim=1)
 
-            xk = self.cache_k
-            xv = self.cache_v
+            xk = self.cache_k.data
+            xv = self.cache_v.data
 
         keys = repeat_kv(xk, self.n_rep)
         values = repeat_kv(xv, self.n_rep)
@@ -174,8 +174,32 @@ class Llama1B(nn.Module):
     def __init__(self, seq_len, full=False, cache=False):
         super(Llama1B, self).__init__()
         self.full = full
-        self.embed_dim, self.head_dim = 2048, 32
+        self.embed_dim, self.head_dim = 256, 32
         self.config = LlamaConfig(self.embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0,
+                                  self.embed_dim//self.head_dim, seq_len, True)
+        self.layers = nn.ModuleList(
+            [Transformer(self.config, cache) for _ in range(self.config.n_layers)]
+        )
+        if full:
+            self.embedding = nn.Embedding(self.config.vocab_size, self.config.dim)
+            self.output = nn.Linear(self.config.dim, self.config.vocab_size, bias=False)
+
+    def forward(self, x):
+        if self.full:
+            x = self.embedding(x)
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+        if self.full:
+            x = self.output(x)
+        return x
+
+
+class Llama8B(nn.Module):
+    def __init__(self, seq_len, full=False, cache=False):
+        super(Llama8B, self).__init__()
+        self.full = full
+        self.embed_dim, self.head_dim = 4096, 32
+        self.config = LlamaConfig(self.embed_dim, 32, self.head_dim, 8, 128256, 1024, 1.3, 1e-05, 500000.0,
                                   self.embed_dim//self.head_dim, seq_len, True)
         self.layers = nn.ModuleList(
             [Transformer(self.config, cache) for _ in range(self.config.n_layers)]

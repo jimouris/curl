@@ -87,7 +87,7 @@ def get_args():
         default=0,
         help="Use key-value cache for this many new tokens",
     )
-    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'ModernBertLarge', 'Llama']
+    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'ModernBertLarge', 'Llama', 'LLama8B']
     parser.add_argument(
         "--model",
         choices=models,

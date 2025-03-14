@@ -56,7 +56,7 @@ class LLMs:
         from examples.llms.gpt.gpt import GPT2, GPTNeo
         from examples.llms.bert.bert import BertTiny, BertBase, BertLarge
         from examples.llms.bert.modern_bert import ModernBert, ModernBertLarge
-        from examples.llms.models.llama import Llama1B
+        from examples.llms.models.llama import Llama1B, Llama8B
 
 
         all_models = {
@@ -67,7 +67,8 @@ class LLMs:
             'bertlarge': BertLarge,
             'modernbert': ModernBert,
             'modernbertlarge': ModernBertLarge,
-            'llama': Llama1B
+            'llama': Llama1B,
+            'llama8b': Llama8B
         }
 
         self.device = torch.device(device)
