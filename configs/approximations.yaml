@@ -102,9 +102,9 @@ functions:
     method: "approximation"
 mpc:
   active_security: False
-  provider: "TFP"
+  provider: "TTP"
   protocol: "beaver"
-  jax: True
+  jax: False
 nn:
   dpsmpc:
     protocol: "layer_estimation"
