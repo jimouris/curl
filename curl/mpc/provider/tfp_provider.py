@@ -108,7 +108,7 @@ class TrustedFirstParty(TupleProvider):
 
     def generate_permutation(self, tensor_size, device=None):
         """Generate a random permutation."""
-        if device == "cuda":
+        if "cuda" in device.type:
             generator = torch.Generator(device="cuda").manual_seed(0)
         else:
             generator = torch.Generator(device="cpu").manual_seed(0)
