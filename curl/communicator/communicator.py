@@ -189,6 +189,11 @@ def _logging(func):
                 self._log_communication(0, 1)
             elif func.__name__ == "scatter":  # N - 1 tensors communicated
                 self._log_communication(args[0][0].nelement() * (len(args[0]) - 1))
+            elif func.__name__ == "broadcast_parallel":
+                for arg in args[0]:
+                    self._log_communication(arg.nelement())
+            elif func.__name__ == "send_obj":
+                self._log_communication(1)
             elif "batched" in kwargs and kwargs["batched"]:
                 nbytes = sum(x.nelement() for x in args[0])
                 self._log_communication(nbytes)

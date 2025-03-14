@@ -139,7 +139,7 @@ def main():
     curl.cfg.load_config(cfg_file)
 
     if args.communication and cfg.mpc.provider == "TTP":
-        cfg.mpc.provider = "TFP"
+        raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
         launcher = MultiProcessLauncher(args.world_size, args.evaluator_size, _run_experiment, args, cfg_file)
