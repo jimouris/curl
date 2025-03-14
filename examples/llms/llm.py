@@ -78,7 +78,10 @@ class LLMs:
         self.kv_cache = kv_cache
         model = model.lower()
         if model in all_models:
-            m_clear = all_models[model](seq_len=tensor_size[1], full=full, cache=(kv_cache != 0))
+            if "llama" in model:
+                m_clear = all_models[model](seq_len=tensor_size[1], full=full, cache=(kv_cache != 0))
+            else:
+                m_clear = all_models[model](seq_len=tensor_size[1], full=full)
             if hasattr(m_clear, "to"):
                 m_clear = m_clear.to(self.device)
             self.models = [m_clear.encrypt(src=0)]
