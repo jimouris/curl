@@ -174,7 +174,7 @@ class Llama1B(nn.Module):
     def __init__(self, seq_len, full=False, cache=False):
         super(Llama1B, self).__init__()
         self.full = full
-        self.embed_dim, self.head_dim = 256, 32
+        self.embed_dim, self.head_dim = 2048, 32
         self.config = LlamaConfig(self.embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0,
                                   self.embed_dim//self.head_dim, seq_len, True)
         self.layers = nn.ModuleList(
