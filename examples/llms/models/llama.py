@@ -170,12 +170,14 @@ class Transformer(nn.Module):
         return x
 
 
-class Llama1B(nn.Module):
-    def __init__(self, seq_len, full=False, cache=False):
-        super(Llama1B, self).__init__()
+class Llama(nn.Module):
+    def __init__(self, embed_dim, head_dim, n_layers, n_kv_heads, vocab_size, multiple_of, ffn_dim_multiplier,
+                 seq_len, full=False, cache=False):
+        super(Llama, self).__init__()
         self.full = full
         self.embed_dim, self.head_dim = 2048, 32
-        self.config = LlamaConfig(self.embed_dim, 16, self.head_dim, 8, 128256, 256, 1.5, 1e-05, 500000.0,
+        self.config = LlamaConfig(self.embed_dim, n_layers, self.head_dim, n_kv_heads, vocab_size, multiple_of,
+                                  ffn_dim_multiplier, 1e-05, 500000.0,
                                   self.embed_dim//self.head_dim, seq_len, True)
         self.layers = nn.ModuleList(
             [Transformer(self.config, cache) for _ in range(self.config.n_layers)]
@@ -194,25 +196,12 @@ class Llama1B(nn.Module):
         return x
 
 
-class Llama8B(nn.Module):
+class Llama1B(Llama):
     def __init__(self, seq_len, full=False, cache=False):
-        super(Llama8B, self).__init__()
-        self.full = full
-        self.embed_dim, self.head_dim = 4096, 32
-        self.config = LlamaConfig(self.embed_dim, 32, self.head_dim, 8, 128256, 1024, 1.3, 1e-05, 500000.0,
-                                  self.embed_dim//self.head_dim, seq_len, True)
-        self.layers = nn.ModuleList(
-            [Transformer(self.config, cache) for _ in range(self.config.n_layers)]
-        )
-        if full:
-            self.embedding = nn.Embedding(self.config.vocab_size, self.config.dim)
-            self.output = nn.Linear(self.config.dim, self.config.vocab_size, bias=False)
+        super(Llama1B, self).__init__(embed_dim=2048, head_dim=32, n_layers=16, n_kv_heads=8, vocab_size=128256,
+                                      multiple_of=256, ffn_dim_multiplier=1.5, seq_len=seq_len, full=full, cache=cache)
 
-    def forward(self, x):
-        if self.full:
-            x = self.embedding(x)
-        for i, layer in enumerate(self.layers):
-            x = layer(x)
-        if self.full:
-            x = self.output(x)
-        return x
+class Llama8B(Llama):
+    def __init__(self, seq_len, full=False, cache=False):
+        super(Llama1B, self).__init__(embed_dim=4096, head_dim=32, n_layers=32, n_kv_heads=8, vocab_size=128256,
+                                      multiple_of=1024, ffn_dim_multiplier=1.3, seq_len=seq_len, full=full, cache=cache)

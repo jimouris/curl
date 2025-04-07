@@ -48,7 +48,7 @@ def load_data(mode):
 def get_gpt_model(path, mode, device):
     # Load pre-trained GPT-2 tokenizer and model
     tokenizer = GPT2Tokenizer.from_pretrained(path)
-    if mode in ("Neo", "NeoSecret"):
+    if mode == "GPTNeo":
         model = GPTNeoForCausalLM.from_pretrained(path)
     else:
         model = GPT2LMHeadModel.from_pretrained(path)
@@ -56,16 +56,10 @@ def get_gpt_model(path, mode, device):
     model.to(device)
 
     match mode:
-        case "Clear":
-            from examples.llms.gpt.gpt_clear import GPT2LMHead as GPTLMHead
-        case "Fixed":
-            from examples.llms.gpt.gpt_fixed import GPT2LMHead as GPTLMHead
-        case "Secret":
-            from examples.llms.gpt.gpt_curl import GPT2LMHead as GPTLMHead
-        case "Neo":
-            from examples.llms.gpt.gpt_neo import GPTNeoLMHead as GPTLMHead
-        case "NeoSecret":
-            from examples.llms.gpt.gpt_neo_curl import GPTNeoLMHead as GPTLMHead
+        case "GPT2":
+            from examples.llms.models.gpt2 import GPT2LMHead as GPTLMHead
+        case "GPTNeo":
+            from examples.llms.models.gpt_neo import GPTNeoLMHead as GPTLMHead
         case _:
             raise ValueError(f"Invalid model mode {mode}")
 
@@ -73,14 +67,13 @@ def get_gpt_model(path, mode, device):
     curl_model.load_state_dict(model.state_dict())
     curl_model.to(device)
 
-    if mode in ("Secret", "NeoSecret"):
-        # Increase the vocabulary size to the next power of two.
-        # This is used for correctness in the 'evaluate_embed' function.
-        weight = curl_model.transformer.wte.weight
-        new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
-        append = torch.zeros(new_size, weight.size()[1], device=weight.device)
-        curl_model.transformer.wte.weight = torch.cat((weight, append))
-        curl_model.encrypt(src=0)
+    # Increase the vocabulary size to the next power of two.
+    # This is used for correctness in the 'evaluate_embed' function.
+    weight = curl_model.transformer.wte.weight
+    new_size = pow(2, ceil(log2(weight.size()[0]))) - weight.size()[0]
+    append = torch.zeros(new_size, weight.size()[1], device=weight.device)
+    curl_model.transformer.wte.weight = torch.cat((weight, append))
+    curl_model.encrypt(src=0)
     return tokenizer, model, curl_model
 
 def get_predictions(tokenizer, predictions, target_word):
@@ -138,11 +131,8 @@ def evaluate_lambada(mode, data="tsv", device=torch.device("cpu"), secret=False)
                 predictions = outputs.logits
             correct_predictions += get_predictions(tokenizer, predictions, target_word)
 
-        if mode in ("Secret", "NeoSecret"):
-            curl_outputs = curl_model(curl.cryptensor(input_ids, device=device, precision=0))
-            curl_predictions = curl_outputs.get_plain_text()
-        else:
-            curl_predictions = curl_model(input_ids.to(device))
+        curl_outputs = curl_model(curl.cryptensor(input_ids, device=device, precision=0))
+        curl_predictions = curl_outputs.get_plain_text()
         curl_correct_predictions += get_predictions(tokenizer, curl_predictions, target_word)
 
         print(f'LAMBADA Torch Accuracy: {correct_predictions / total_predictions:.4f} ({correct_predictions})')
@@ -156,17 +146,16 @@ def evaluate_lambada(mode, data="tsv", device=torch.device("cpu"), secret=False)
 
 def run_lambada(cfg_file, communication=False, device=None, mode="Clear", data="tsv", secret=False):
     # First cold run.
-    if mode in ("Secret", "NeoSecret"):
-        curl.init(cfg_file, device=device)
-        if communication:
-            comm.get().set_verbosity(True)
+    curl.init(cfg_file, device=device)
+    if communication:
+        comm.get().set_verbosity(True)
 
     base_accuracy, curl_accuracy = evaluate_lambada(mode, data, device, secret)
 
     logging.info(f"Base Accuracy: {base_accuracy}")
     logging.info(f"Curl Accuracy: {curl_accuracy}")
 
-    if mode in ("Secret", "NeoSecret") and communication:
+    if communication:
         comm.get().print_communication_stats()
         exit(0)
 
@@ -199,12 +188,6 @@ def get_args():
         help="Use approximations for non-linear functions",
     )
     parser.add_argument(
-        "--no-cmp",
-        default=False,
-        action="store_true",
-        help="Use LUTs for bounded functions without comparisons",
-    )
-    parser.add_argument(
         "--communication",
         default=False,
         action="store_true",
@@ -225,7 +208,7 @@ def get_args():
         action="store_true",
         help="Use different gpu for each party. Will override --device if selected",
     )
-    models=["Clear", "Fixed", "Secret", "Neo", "NeoSecret"]
+    models=["GPT2", "GPTNeo"]
     parser.add_argument(
         "--model",
         choices=models,
@@ -251,13 +234,10 @@ def get_args():
 def get_config(args):
     cfg_file = curl.cfg.get_default_config_path()
     if args.approximations:
-        logging.info("Using Approximation Config:")
+        logging.info("Using Approximation Config")
         cfg_file = cfg_file.replace("default", "approximations")
-    elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons:")
-        cfg_file = cfg_file.replace("default", "llm_config")
     elif args.evaluator_size:
-        logging.info("Using Fission config")
+        logging.info("Using Fission Config")
         cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")

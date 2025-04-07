@@ -9,6 +9,7 @@ class Attention(nn.Module):
     def forward(self, x, mask=True):
         return self.attention(x, mask)
 
+
 class GPTAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, layer_id):
         super(GPTAttention, self).__init__()
@@ -66,6 +67,7 @@ class GPTAttention(nn.Module):
         y = self.out_proj(y)
         return y
 
+
 class GPTMLP(nn.Module):
     def __init__(self, embed_dim):
         super().__init__()
@@ -78,6 +80,7 @@ class GPTMLP(nn.Module):
         x = self.act(x)
         x = self.c_proj(x)
         return x
+
 
 class GPTBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, layer_id):
@@ -92,37 +95,50 @@ class GPTBlock(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
+
 class Transformer(nn.Module):
-    def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len):
+    def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len, full):
         super(Transformer, self).__init__()
+        self.full = full
         self.embed_dim = embed_dim
-
-        self.wte = nn.Embedding(vocab_size, embed_dim)
-        self.wpe = nn.Embedding(seq_len, embed_dim)
-
         self.h = nn.Sequential(
             *[GPTBlock(embed_dim, num_heads, layer_id) for layer_id in range(num_blocks)]
         )
-        self.ln_f = nn.LayerNorm(embed_dim)
+        if full:
+            self.wte = nn.Embedding(vocab_size, embed_dim)
+            self.wpe = nn.Embedding(seq_len, embed_dim)
+            self.ln_f = nn.LayerNorm(embed_dim)
 
     def forward(self, x, target=None):
-        tok_embedding = self.wte(x)
-        pos_embedding = self.wpe.weight[:x.size()[1], :].reshape(x.size()[0], x.size()[1], -1)
-        x = tok_embedding + pos_embedding
+        if self.full:
+            tok_embedding = self.wte(x)
+            pos_embedding = self.wpe.weight[:x.size()[1], :].reshape(x.size()[0], x.size()[1], -1)
+            x = tok_embedding + pos_embedding
         x = self.h(x)
-        x = self.ln_f(x)
+        if self.full:
+            x = self.ln_f(x)
         return x
 
+
 class GPT(nn.Module):
-    def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len):
+    def __init__(self, embed_dim, num_heads, num_blocks, vocab_size, seq_len, full=True):
         super(GPT, self).__init__()
-        self.transformer = Transformer(embed_dim, num_heads, num_blocks, vocab_size, seq_len)
-        self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)
+        self.full = full
+        self.embed_dim = embed_dim
+        self.transformer = Transformer(embed_dim, num_heads, num_blocks, vocab_size, seq_len, full)
+        if full:
+            self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)
 
     def forward(self, x, target=None):
         x = self.transformer(x, target)
-        x = self.lm_head(x)
+        if self.full:
+            x = self.lm_head(x)
         return x
+
+
+class GPTNeo(GPT):
+    def __init__(self, seq_len=2048, full=True):
+        super(GPTNeo, self).__init__(embed_dim=2048, num_heads=16, num_blocks=24, vocab_size=50257, seq_len=seq_len, full=full)
 
 class GPTNeoLMHead(GPT):
     def __init__(self, seq_len=2048):

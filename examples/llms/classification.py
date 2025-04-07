@@ -19,10 +19,9 @@ import curl.communicator as comm
 
 from curl.config import cfg
 from examples.multiprocess_launcher import MultiProcessLauncher
-from examples.llms.bert.bert_for_sequence_classification import (BertTinyForSequenceClassification,
-                                                                 BertBaseForSequenceClassification,
-                                                                 BertLargeForSequenceClassification)
-from examples.llms.bert.modern_bert import ModernBertForTokenClassification, ModernBertLargeForTokenClassification
+from examples.llms.models.bert import (BertTinyForSequenceClassification, BertBaseForSequenceClassification,
+                                       BertLargeForSequenceClassification)
+from examples.llms.models.modern_bert import ModernBertForTokenClassification, ModernBertLargeForTokenClassification
 
 
 def load_tsv(task, tokenizer, device, delimiter='\t'):
@@ -188,12 +187,6 @@ def get_args():
         help="Use approximations for non-linear functions",
     )
     parser.add_argument(
-        "--no-cmp",
-        default=False,
-        action="store_true",
-        help="Use LUTs for bounded functions without comparisons",
-    )
-    parser.add_argument(
         "--communication",
         default=False,
         action="store_true",
@@ -241,13 +234,10 @@ def get_args():
 def get_config(args):
     cfg_file = curl.cfg.get_default_config_path()
     if args.approximations:
-        logging.info("Using Approximation Config:")
+        logging.info("Using Approximation Config")
         cfg_file = cfg_file.replace("default", "approximations")
-    elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons:")
-        cfg_file = cfg_file.replace("default", "llm_config")
     elif args.evaluator_size:
-        logging.info("Using Fission config")
+        logging.info("Using Fission Config")
         cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")

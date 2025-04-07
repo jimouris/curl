@@ -6,18 +6,17 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import numpy
 import os
 import pickle
 import random
 import string
 import threading
-
-import numpy
 import torch
-import torch.distributed as dist
-from curl.common import serial
-from torch.distributed import ReduceOp
 
+from curl.common import serial
+from torch import distributed as dist
+from torch.distributed import ReduceOp
 from .communicator import _logging, Communicator
 
 

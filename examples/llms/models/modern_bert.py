@@ -153,7 +153,8 @@ class ModernBertModel(nn.Module):
         super().__init__()
         self.full = full
         self.embed_dim = hidden_size
-        self.embeddings = ModernBertEmbeddings(vocab_size, hidden_size)
+        if full:
+            self.embeddings = ModernBertEmbeddings(vocab_size, hidden_size)
         self.layers = nn.ModuleList(
             [ModernBertLayer(hidden_size, intermediate_size, n_heads, layer_id) for layer_id in range(n_layers)])
         self.final_norm = nn.LayerNorm(hidden_size, bias=False)

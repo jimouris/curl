@@ -5,18 +5,16 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import curl
 import math
 import numpy as np
 import pywt
-
-import curl
 import torch
 
+from curl import communicator as comm
 from curl.config import cfg
 from curl.cuda import CUDALongTensor
-
 from curl.evaluator.evaluator import EvaluatorClient
-import curl.communicator as comm
 
 __all__ = [
     "exp",

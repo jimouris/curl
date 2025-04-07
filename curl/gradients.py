@@ -5,13 +5,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import curl
 import logging
 import math
-from functools import reduce
-
-import curl
 import torch
 
+from curl.config import cfg
+from functools import reduce
 from .common.functions.approximations import permute_reveal_evaluate_share
 from .common.util import _grad_input_padding
 
@@ -119,13 +119,11 @@ class AutogradContext(BaseAutogradContext):
         self.non_differentiable = []
 
     def save_for_backward(self, value):
-        # self.context.append(value)
-        pass
+        self.context.append(value)
 
     def save_multiple_for_backward(self, values):
-        # for value in values:
-        #     self.save_for_backward(value)
-        pass
+        for value in values:
+            self.save_for_backward(value)
 
     def mark_non_differentiable(self, non_differentiable):
         if not isinstance(non_differentiable, list):
@@ -1955,7 +1953,6 @@ class AutogradBatchNorm(AutogradFunction):
         # return gradients:
         return (grad_input, grad_weight, grad_bias)
 
-from curl.config import cfg
 
 @register_function("layernorm")
 class AutogradLayerNorm(AutogradFunction):
@@ -1987,7 +1984,7 @@ class AutogradLayerNorm(AutogradFunction):
 
         Returns: (weight * normalized input + bias) of shape `(N, C, +)`.
         """
-        if cfg.nn.gradients.layernorm == "fission":
+        if not training and cfg.nn.gradients.layernorm == "fission":
             x_norm = permute_reveal_evaluate_share(x, "layernorm")
             inv_var = None
         else:
@@ -2003,13 +2000,11 @@ class AutogradLayerNorm(AutogradFunction):
                     inv_var = (variance + eps).inv_sqrt()
 
             # reshape shape (C) to broadcastable (1, C, 1, +):
-            # mean = mean.reshape(broadcast_shape)
             inv_var = inv_var.reshape(mean.shape)
-            # weight = weight.reshape(broadcast_shape)
-            # bias = bias.reshape(broadcast_shape)
 
             # compute z-scores:
             x_norm = (x - mean) * inv_var
+
         # save context and return:
         ctx.save_multiple_for_backward((x_norm, weight, inv_var, training))
         return x_norm * weight + bias
