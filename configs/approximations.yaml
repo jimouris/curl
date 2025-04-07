@@ -6,98 +6,45 @@ debug:
 encoder:
   precision_bits: 16
   trunc_method:
-    # prod: "crypten"
-    prod: "egk"
-    # lut: "crypten"
-    lut: "egk"
+     prod: "crypten"
 functions:
   max:
     method: "log_reduction"
-
   exp:
     method: "limit"
     iterations: 8
-    haar_size_bits: 5
-    bior_size_bits: 5
-    lut_max_bits: 6
-    all_neg: True
-    neg_lut_size: 256 # 2^8
-
   log:
     method: "iter"
     iterations: 2
     exp_iterations: 8
     order: 8
-    haar_size_bits: 8
-    bior_size_bits: 7
-    lut_max_bits: 6
-
   reciprocal:
     method: "NR"
     nr_iters: 10
     log_iters: 1
     all_pos: True
     initial: null
-    haar_size_bits: 8
-    bior_size_bits: 7
-    lut_max_bits: 6
-
   sqrt:
     method: "NR"
     nr_iters: 3
     nr_initial: null
-    haar_size_bits: 7
-    bior_size_bits: 7
-    lut_max_bits: 8
-
   inv_sqrt:
     method: "NR"
-    haar_size_bits: 11
-    bior_size_bits: 11
-    lut_max_bits: 8
-    tailored_0_lut_max_bits: 0
-    tailored_0_haar_size_bits: 12
-    tailored_1_lut_max_bits: 8
-    tailored_1_haar_size_bits: 8
-
   sigmoid_tanh:
     method: "reciprocal"
     terms: 32
-    haar_size_bits: 6
-    bior_size_bits: 5
-    sigmoid_lut_max_bits: 4 # [-16, 16] for "bior"
-    # sigmoid_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
-    tanh_lut_max_bits: 3 # [-8, 8]
-
   trigonometry:
     method: "NR"
-    haar_size_bits: 5
-    bior_size_bits: 5
-    lut_max_bits: 6
     iterations: 10
-
   erf:
-    method: "Taylor" # "bior-lut-only"
+    method: "Taylor"
     iterations: 8
-    haar_size_bits: 5
-    bior_size_bits: 7
-    lut_max_bits: 2 # [-4, 4]
-
   gelu:
     method: "erf"
-    haar_size_bits: 4
-    bior_size_bits: 4
-    lut_max_bits: 2
-
   silu:
     method: "sigmoid"
-    haar_size_bits: 4
-    bior_size_bits: 6
-    lut_max_bits: 4 # [-16, 16] for "bior"
-
   softmax:
     method: "approximation"
-
   log_softmax:
     method: "approximation"
 mpc:

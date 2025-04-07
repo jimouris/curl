@@ -11,92 +11,68 @@ encoder:
 functions:
   max:
     method: "log_reduction"
-
   exp:
-    method: "limit"
+    method: "bior"
     iterations: 8
     haar_size_bits: 5
     bior_size_bits: 5
     lut_max_bits: 6
     all_neg: True
     neg_lut_size: 256 # 2^8
-
   log:
     method: "bior"
-    iterations: 2
-    exp_iterations: 8
-    order: 8
     haar_size_bits: 8
-    bior_size_bits: 7
+    bior_size_bits: 8
     lut_max_bits: 6
-
   reciprocal:
-    method: "haar"
-    nr_iters: 10
-    log_iters: 1
+    method: "bior"
     all_pos: True
     initial: null
     haar_size_bits: 8
     bior_size_bits: 7
     lut_max_bits: 6
-
   sqrt:
     method: "bior"
-    nr_iters: 5
-    nr_initial: null
-    haar_size_bits: 7
-    bior_size_bits: 7
-    lut_max_bits: 8
-
+    haar_size_bits: 6
+    bior_size_bits: 6
+    lut_max_bits: 6
   inv_sqrt:
-    method: "tailored_haar" # "haar"
-    haar_size_bits: 11
-    bior_size_bits: 11
-    lut_max_bits: 8
+    method: "bior"
+    haar_size_bits: 16
+    bior_size_bits: 10
+    lut_max_bits: 1
     tailored_0_lut_max_bits: 0
     tailored_0_haar_size_bits: 12
     tailored_1_lut_max_bits: 8
     tailored_1_haar_size_bits: 8
-
   sigmoid_tanh:
-    method: "haar" # "bior-lut-only"
-    terms: 32
-    haar_size_bits: 6
-    bior_size_bits: 5
-    sigmoid_lut_max_bits: 4 # [-16, 16] for "bior"
-    # sigmoid_lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
-    tanh_lut_max_bits: 3 # [-8, 8]
-
+    method: "bior"
+    haar_size_bits: 8
+    bior_size_bits: 8
+    sigmoid_lut_max_bits: 6
+    tanh_lut_max_bits: 5
   trigonometry:
-    method: "bior" # "bior-lut-only"
-    haar_size_bits: 5
-    bior_size_bits: 5
-    lut_max_bits: 6
-    iterations: 10
-
+    method: "bior"
+    haar_size_bits: 8
+    bior_size_bits: 8
+    lut_max_bits: 5
   erf:
-    method: "bior" # "bior-lut-only"
-    iterations: 8
-    haar_size_bits: 5
-    bior_size_bits: 7
-    lut_max_bits: 2 # [-4, 4]
-
+    method: "bior"
+    haar_size_bits: 8
+    bior_size_bits: 8
+    lut_max_bits: 5
   gelu:
-    method: "haar" # "haar-lut-only", "bior", "bior-lut-only"
+    method: "bior-lut-only"
     haar_size_bits: 4
     bior_size_bits: 4
     lut_max_bits: 2
-
   silu:
-    method: "haar" # "bior", "haar-lut-only", "bior-lut-only"
+    method: "bior-lut-only"
     haar_size_bits: 4
-    bior_size_bits: 6
-    lut_max_bits: 4 # [-16, 16] for "bior"
-  # lut_max_bits: 6 # [-64, 64] for "bior-lut-only"
-
+    bior_size_bits: 4
+    lut_max_bits: 4
   softmax:
     method: "approximation"
-
   log_softmax:
     method: "approximation"
 mpc:
@@ -111,4 +87,3 @@ nn:
     cache_pred_size: True
   gradients:
     layernorm: "normal"
-

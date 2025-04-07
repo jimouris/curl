@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-python examples/llms/launcher.py --world_size 2 --tensor_size 1000,10 --multiprocess
+python examples/llms/launcher.py --world_size 2 --tensor_size 1,10 --multiprocess --model BertTiny
 """
 
 import argparse
@@ -39,6 +39,12 @@ def get_args():
         help="The number of eval parties to launch. Each party acts as its own process",
     )
     parser.add_argument(
+        "--approximations",
+        default=False,
+        action="store_true",
+        help="Use approximations for non-linear functions",
+    )
+    parser.add_argument(
         "-s",
         "--tensor_size",
         type=tuple_type,
@@ -50,18 +56,6 @@ def get_args():
         default=False,
         action="store_true",
         help="Run example in multiprocess mode",
-    )
-    parser.add_argument(
-        "--approximations",
-        default=False,
-        action="store_true",
-        help="Use approximations for non-linear functions",
-    )
-    parser.add_argument(
-        "--no-cmp",
-        default=False,
-        action="store_true",
-        help="Use LUTs for bounded functions without comparisons",
     )
     parser.add_argument(
         "--communication",
@@ -117,18 +111,15 @@ def get_config(args):
     if args.approximations:
         logging.info("Using Approximation Config")
         cfg_file = cfg_file.replace("default", "approximations")
-    elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons")
-        cfg_file = cfg_file.replace("default", "llm_config")
     elif args.evaluator_size:
-        logging.info("Using Fission config")
+        logging.info("Using Fission Config")
         cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")
     return cfg_file
 
 def _run_experiment(args):
-    # only import here to initialize curl within the subprocesses
+    # Only import here to initialize curl within the subprocesses
     from examples.llms.llm import run_llm
 
     # Only Rank 0 will display logs.
