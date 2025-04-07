@@ -117,6 +117,7 @@ class BertEncoder(nn.Module):
             x = l(x)
         return x
 
+
 class BertPooler(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
@@ -129,18 +130,25 @@ class BertPooler(nn.Module):
         out = self.tanh(out)
         return out
 
-class BertModel(nn.Module):
-    def __init__(self, vocab_size, emb_size, seq_len, n_heads, n_layers):
-        super().__init__()
-        self.embeddings = BertEmbeddings(vocab_size, emb_size, seq_len)
-        self.encoder = BertEncoder(emb_size, n_heads, n_layers)
-        self.pooler = BertPooler(emb_size)
 
-    def forward(self, input_ids, token_type_ids):
-        emb = self.embeddings(input_ids, token_type_ids)
+class BertModel(nn.Module):
+    def __init__(self, vocab_size, emb_size, seq_len, n_heads, n_layers, full=True):
+        super().__init__()
+        self.full = full
+        self.embed_dim = emb_size
+        self.encoder = BertEncoder(emb_size, n_heads, n_layers)
+        if full:
+            self.embeddings = BertEmbeddings(vocab_size, emb_size, seq_len)
+            self.pooler = BertPooler(emb_size)
+
+    def forward(self, input_ids, token_type_ids=None):
+        token_type_ids = token_type_ids if token_type_ids is not None else input_ids
+        emb = self.embeddings(input_ids, token_type_ids) if self.full else input_ids
         out = self.encoder(emb)
-        pooled_out = self.pooler(out)
-        return out, pooled_out
+        if self.full:
+            out = self.pooler(out)
+        return out
+
 
 class BertForSequenceClassification(nn.Module):
     def __init__(self, vocab_size, emb_size, seq_len, n_heads, n_layers):
@@ -149,16 +157,31 @@ class BertForSequenceClassification(nn.Module):
         self.classifier = nn.Linear(emb_size, 2)
 
     def forward(self, input_ids, token_type_ids):
-        _, pooled_out = self.bert(input_ids, token_type_ids)
+        pooled_out = self.bert(input_ids, token_type_ids)
         logits = self.classifier(pooled_out)
         return logits
 
+
+class BertTiny(BertModel):
+    def __init__(self, seq_len, full=True):
+        super(BertTiny, self).__init__(emb_size=128, n_heads=2, n_layers=2, vocab_size=30522, seq_len=seq_len, full=full)
+
+class BertBase(BertModel):
+    def __init__(self, seq_len, full=True):
+        super(BertBase, self).__init__(emb_size=768, n_heads=12, n_layers=12, vocab_size=30522, seq_len=seq_len, full=full)
+
+class BertLarge(BertModel):
+    def __init__(self, seq_len, full=True):
+        super(BertLarge, self).__init__(emb_size=1024, n_heads=16, n_layers=24, vocab_size=30522, seq_len=seq_len, full=full)
 
 class BertTinyForSequenceClassification(BertForSequenceClassification):
     def __init__(self):
         super(BertTinyForSequenceClassification, self).__init__(vocab_size=30522, emb_size=128, seq_len=512, n_heads=2, n_layers=2)
 
-
 class BertBaseForSequenceClassification(BertForSequenceClassification):
     def __init__(self):
         super(BertBaseForSequenceClassification, self).__init__(vocab_size=28996, emb_size=768, seq_len=512, n_heads=12, n_layers=12)
+
+class BertLargeForSequenceClassification(BertForSequenceClassification):
+    def __init__(self):
+        super(BertLargeForSequenceClassification, self).__init__(vocab_size=28996, emb_size=1024, seq_len=512, n_heads=16, n_layers=24)

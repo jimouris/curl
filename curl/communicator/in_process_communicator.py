@@ -25,11 +25,12 @@ class InProcessCommunicator(Communicator):
     lock = threading.Lock()
 
     @classmethod
-    def initialize(cls, rank, world_size, init_ttp=False):
-        cls.tls.instance = cls(rank, world_size)
+    def initialize(cls, rank, world_size, evaluator_size, init_ttp=False):
+        cls.tls.instance = cls(rank, world_size, evaluator_size)
 
-    def __init__(self, rank, world_size, init_ttp=False):
+    def __init__(self, rank, world_size, evaluator_size, init_ttp=False):
         self.world_size = world_size
+        self.evaluator_size = evaluator_size
         self.rank = rank
         self.reset_communication_stats()
         self._name = f"rank{rank}"
@@ -42,7 +43,7 @@ class InProcessCommunicator(Communicator):
 
                 # This prevents one thread from running ahead of the others and doing
                 # multiple puts that would show up in the get calls below
-                InProcessCommunicator.barrier = threading.Barrier(self.world_size)
+                InProcessCommunicator.barrier = threading.Barrier(self.world_size + self.evaluator_size)
 
         # logging:
         level = logging.getLogger().level

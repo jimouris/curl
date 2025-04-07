@@ -5,7 +5,6 @@ import timeit
 from collections import namedtuple
 import numpy as np
 import pandas as pd
-import torch
 import functools
 
 import curl
@@ -53,32 +52,37 @@ class LLMs:
         tensor_size (int or tuple): size of tensor for benchmarking runtimes
     """
 
-    def __init__(self, model, tensor_size, device="cpu", full=True):
-        from examples.llms.gpt import GPT2, GPTNeo
-        from examples.llms.bert import BertTiny, BertBase, BertLarge
+    def __init__(self, model, tensor_size, device="cpu", full=True, kv_cache=0):
+        from examples.llms.models.gpt2 import GPT2
+        from examples.llms.models.gpt_neo import GPTNeo
+        from examples.llms.models.bert import BertTiny, BertBase, BertLarge
+        from examples.llms.models.modern_bert import ModernBert, ModernBertLarge
+        from examples.llms.models.llama import Llama1B, Llama8B
+
 
         all_models = {
             'gpt2': GPT2,
             'gptneo': GPTNeo,
             'berttiny': BertTiny,
             'bertbase': BertBase,
-            'bertlarge': BertLarge
+            'bertlarge': BertLarge,
+            'modernbert': ModernBert,
+            'modernbertlarge': ModernBertLarge,
+            'llama': Llama1B,
+            'llama8b': Llama8B
         }
 
         self.device = torch.device(device)
         self.tensor_size = tensor_size
         self.df = None
         self.full = full
+        self.kv_cache = kv_cache
         model = model.lower()
-        if model is None or model == 'all':
-            self.models = []
-            for m in all_models.values():
-                m_clear = m(seq_len=tensor_size[1], full=full)
-                if hasattr(m_clear, "to"):
-                    m_clear = m_clear.to(self.device)
-                self.models.append(m_clear.encrypt(src=0))
-        elif model in all_models:
-            m_clear = all_models[model](seq_len=tensor_size[1], full=full)
+        if model in all_models:
+            if "llama" in model:
+                m_clear = all_models[model](seq_len=tensor_size[1], full=full, cache=(kv_cache != 0))
+            else:
+                m_clear = all_models[model](seq_len=tensor_size[1], full=full)
             if hasattr(m_clear, "to"):
                 m_clear = m_clear.to(self.device)
             self.models = [m_clear.encrypt(src=0)]
@@ -87,20 +91,21 @@ class LLMs:
 
     def __repr__(self):
         if self.df is not None:
-            return self.df.to_string(index=False, justify="left")
+            return " ".join(self.df.astype(str).values.flatten())
         return "No Function Benchmarks"
 
     @staticmethod
     @time_me
-    def time_llm(x, model):
-        return model(x)
+    def time_llm(x, model, kv_cache=0):
+        with curl.no_grad():
+            output = model(x)
+        for _ in range(kv_cache):
+            output = model(x[:, :1, :])
+        return output
 
     def get_runtimes(self):
+        from examples.llms.models.llama import Llama1B
         """Returns plain text and curl runtimes"""
-
-        rank = comm.get().get_rank()
-        print(f'[Device] Party-{rank} running in {self.device}')
-
         runtimes_enc = []
         for llm in self.models:
             if self.full:
@@ -111,7 +116,7 @@ class LLMs:
 
             llm.eval()
 
-            runtime_enc, _ = LLMs.time_llm(x_enc, llm)
+            runtime_enc, _ = LLMs.time_llm(x_enc, llm, kv_cache=self.kv_cache)
             runtimes_enc.append(runtime_enc)
 
         return runtimes_enc
@@ -127,41 +132,39 @@ class LLMs:
             }
         )
 
-def run_llm(cfg_file, tensor_size, model, with_cache=False, communication=False, full=True, device=None):
-    logging.info("Tensor size '{}'".format(tensor_size))
+def run_llm(tensor_size, model, fill_cache=False, communication=False, full=True, device=None, kv_cache=0):
+    rank = comm.get().get_rank()
+    logging.info(f"[Party {rank}][Device] running in {device}")
+    logging.info(f"[Party {rank}] Tensor size {tensor_size}")
 
     # First cold run.
-    curl.init(cfg_file, device=device)
     if communication:
         comm.get().set_verbosity(True)
 
     functions_data = cfg.config.get('functions', {})
-    filtered_data = {key: value for key, value in functions_data.items() if '_method' in key}
-    logging.info("\t'{}'".format(filtered_data))
-    if with_cache:
-        curl.trace()
+    filtered_data = {
+        key: dict(value)['method'] for key, value in functions_data.items() if 'method' in dict(value)
+    }
+    logging.info(f"[Party {rank}] Config: {filtered_data}")
 
-    logging.info(f"="*22 + " Without Cache " + "="*22)
+    provider = curl.mpc.get_default_provider()
+    if fill_cache:
+        logging.info(f"[Party {rank}] Tracing requests for the cache " + "=" * 20)
+        provider.trace_once()
+    else:
+        provider.load_cache()
 
-    benches = LLMs(model, tensor_size, device=device, full=full)
+    benches = LLMs(model, tensor_size, device=device, full=full, kv_cache=kv_cache)
     benches.run()
-    logging.info("'\n{}\n'".format(benches))
-    logging.info("="*60)
+
+    logging.info(f"[Party {rank}] {benches}")
+
+    if fill_cache:
+        logging.info(f"[Party {rank}] Filling the cache " + "=" * 20)
+        provider.fill_cache()
 
     if communication:
         comm.get().print_communication_stats()
         exit(0)
 
-    if with_cache:
-        # Populate the cache.
-        curl.fill_cache()
-        provider = curl.mpc.get_default_provider()
-        provider.save_cache()
-        provider.load_cache()
-        curl.trace(False)
-
-        # Run with the cache.
-        logging.info(f"="*24 + " With Cache " + "="*24)
-        benches = LLMs(model, tensor_size, device=device, full=full)
-        benches.run()
-        logging.info("'\n{}\n'".format(benches))
+    logging.info(f"[Party {rank}] Done")

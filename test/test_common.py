@@ -106,7 +106,7 @@ class TestCommon(unittest.TestCase):
 
         cfgs = [
             "functions.exp_iterations",
-            "functions.max_method",
+            "functions.max.method",
         ]
 
         for _cfg in cfgs:

@@ -1,3 +1,7 @@
+**/tuple_cache/tuple_cache-*
+**/tuple_cache/request_cache-*
+*.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -159,6 +163,15 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# vscode settings
+# Editor settings
 .vscode/
+.idea/
 .DS_Store
+
+Llama3.2-1B/
+Llama3-8B/
+Llama3.1-8B/
+.devcontainer/
+
+examples/llms/glue_data/
+

@@ -5,13 +5,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 import builtins
 import copy
 import logging
 import os
-import warnings
 
 import curl.common  # noqa: F401
 import curl.common.functions
@@ -20,6 +19,7 @@ import curl.config  # noqa: F401
 import curl.mpc  # noqa: F401
 import curl.nn  # noqa: F401
 import curl.optim  # noqa: F401
+import jax
 import torch
 
 # other imports:
@@ -56,6 +56,7 @@ def init(config_file=None, party_name=None, device=None):
         device (int, str, torch.device): Specify device for RNG generators on
         GPU. Must be a GPU device.
     """
+    jax.config.update("jax_enable_x64", True)
     # Load config file
     if config_file is not None:
         cfg.load_config(config_file)
@@ -73,17 +74,35 @@ def init(config_file=None, party_name=None, device=None):
     if party_name is not None:
         comm.get().set_name(party_name)
 
-    # Setup seeds for Random Number Generation
-    if comm.get().get_rank() < comm.get().get_world_size():
-        _setup_prng()
-        if curl.mpc.ttp_required():
-            curl.mpc.provider.ttp_provider.TTPClient._init()
-        # Initialize the LUTs for the computing parties
-        curl.common.functions.approximations.LookupTables(device=device)
+    if comm.get().get_evaluators_size() == 0:
+        for k, v in cfg.config.functions.items():
+            v = dict(v)
+            if v['method'] == 'fission':
+                logging.error(f"Fission needs at least one evaluator for {k}")
+                exit()
 
-def init_thread(rank, world_size):
-    comm._init(use_threads=True, rank=rank, world_size=world_size)
-    _setup_prng()
+    # Setup seeds for Random Number Generation
+    rank = comm.get().get_rank()
+    if comm.get().get_rank() < comm.get().get_world_size():
+        _setup_prng(device)
+        if curl.mpc.ttp_required():
+            curl.mpc.provider.ttp_provider.TTPClient._init(device)
+
+        # Initialize the LUTs for the computing parties, if needed
+        for k, v in cfg.config.functions.items():
+            v = dict(v)
+            if "haar" in v['method'] or "bior" in v['method']:
+                logging.info(f"[Party {rank}] Initializing LUTs in {device}")
+                curl.common.functions.approximations.LookupTables(device=device)
+                break
+
+        if comm.get().get_evaluators_size() > 0:
+            curl.evaluator.EvaluatorClient._init()
+
+
+def init_thread(rank, world_size, evaluator_size=0, device="cpu"):
+    comm._init(use_threads=True, rank=rank, world_size=world_size, evaluator_size=evaluator_size)
+    _setup_prng(device)
 
 
 def uninit():
@@ -148,7 +167,6 @@ def cryptensor(*args, cryptensor_type=None, **kwargs):
     Factory function to return encrypted tensor of given `cryptensor_type`. If no
     `cryptensor_type` is specified, the default type is used.
     """
-
     # determine CrypTensor type to use:
     if cryptensor_type is None:
         cryptensor_type = get_default_cryptensor_type()
@@ -166,7 +184,7 @@ def is_encrypted_tensor(obj):
     return isinstance(obj, CrypTensor)
 
 
-def _setup_prng():
+def _setup_prng(device):
     """
     Generate shared random seeds to generate pseudo-random sharings of
     zero. For each device, we generator four random seeds:
@@ -193,15 +211,9 @@ def _setup_prng():
             device=torch.device("cpu")
         )
 
-    if torch.cuda.is_available():
-        cuda_device_names = ["cuda"]
-        for i in range(torch.cuda.device_count()):
-            cuda_device_names.append(f"cuda:{i}")
-        cuda_devices = [torch.device(name) for name in cuda_device_names]
-
-        for device in cuda_devices:
-            for key in generators.keys():
-                generators[key][device] = torch.Generator(device=device)
+    if "cuda" in device.type:
+        for key in generators.keys():
+            generators[key][device] = torch.Generator(device=torch.device(device))
 
     # Generate random seeds for Generators
     # NOTE: Chosen seed can be any number, but we choose as a random 64-bit
@@ -224,14 +236,14 @@ def _setup_prng():
 
 def _sync_seeds(next_seed, local_seed, global_seed):
     """
-    Sends random seed to next party, recieve seed from prev. party, and broadcast global seed
+    Sends random seed to next party, receive seed from prev. party, and broadcast global seed
 
     After seeds are distributed. One seed is created for each party to coordinate seeds
     across cuda devices.
     """
     global generators
 
-    # Populated by recieving the previous party's next_seed (irecv)
+    # Populated by receiving the previous party's next_seed (irecv)
     prev_seed = torch.tensor([0], dtype=torch.long)
 
     # Send random seed to next party, receive random seed from prev party
@@ -252,7 +264,7 @@ def _sync_seeds(next_seed, local_seed, global_seed):
     prev_seed = prev_seed.item()
     next_seed = next_seed.item()
 
-    # Broadcase global generator - All parties share one global generator for sync'd rng
+    # Broadcast global generator - All parties share one global generator for sync'd rng
     global_seed = comm.get().broadcast(global_seed, 0).item()
 
     # Create one of each seed per party
@@ -598,6 +610,7 @@ __all__ = [
     "enable_grad",
     "set_grad_enabled",
     "debug",
+    "evaluator",
     "fill_cache",
     "generators",
     "init",

@@ -7,7 +7,7 @@
 
 import curl.communicator as comm
 import torch
-from curl.common.rng import generate_kbit_random_tensor, generate_random_ring_element
+from curl.common.rng import generate_kbit_random_tensor, generate_random_ring_element, generate_permutation
 from curl.common.util import count_wraps, torch_stack
 from curl.mpc.primitives import ArithmeticSharedTensor, BinarySharedTensor
 
@@ -105,3 +105,8 @@ class TrustedFirstParty(TupleProvider):
         b_shares = ArithmeticSharedTensor(b, precision=0, src=0)
 
         return r_shares, r_p_shares, b_shares
+
+    def generate_permutation(self, tensor_size, device=None):
+        """Generate a random permutation."""
+        generator = torch.Generator(device=device).manual_seed(0)
+        return generate_permutation(tensor_size, generator=generator, device=device)

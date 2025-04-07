@@ -1,0 +1,48 @@
+communicator:
+  verbose: False
+debug:
+  debug_mode: False
+  validation_mode: False
+encoder:
+  precision_bits: 16
+  trunc_method:
+    prod: "fission"
+functions:
+  max:
+    method: "log_reduction"
+  exp:
+    method: "fission"
+  log:
+    method: "fission"
+  reciprocal:
+    method: "fission"
+  sqrt:
+    method: "fission"
+  inv_sqrt:
+    method: "fission"
+  sigmoid_tanh:
+    method: "fission"
+  trigonometry:
+    method: "fission"
+  erf:
+    method: "fission"
+  gelu:
+    method: "fission"
+  silu:
+    method: "fission"
+  softmax:
+    method: "fission"
+  log_softmax:
+    method: "fission"
+mpc:
+  active_security: False
+  provider: "TTP"
+  protocol: "beaver"
+  jax: False
+nn:
+  dpsmpc:
+    protocol: "layer_estimation"
+    skip_loss_forward: True
+    cache_pred_size: True
+  gradients:
+    layernorm: "fission"

@@ -92,3 +92,7 @@ class FixedPointEncoder:
     @property
     def scale(self):
         return self._scale
+
+    @property
+    def precision_bits(self):
+        return self._precision_bits

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-python examples/llms/launcher.py --world_size 2 --tensor_size 1000,10 --multiprocess
+python examples/llms/launcher.py --world_size 2 --tensor_size 1,10 --multiprocess --model BertTiny
 """
 
 import argparse
@@ -32,6 +32,19 @@ def get_args():
         help="The number of parties to launch. Each party acts as its own process",
     )
     parser.add_argument(
+        "--evaluator_size",
+        "-es",
+        type=int,
+        default=0,
+        help="The number of eval parties to launch. Each party acts as its own process",
+    )
+    parser.add_argument(
+        "--approximations",
+        default=False,
+        action="store_true",
+        help="Use approximations for non-linear functions",
+    )
+    parser.add_argument(
         "-s",
         "--tensor_size",
         type=tuple_type,
@@ -45,25 +58,13 @@ def get_args():
         help="Run example in multiprocess mode",
     )
     parser.add_argument(
-        "--approximations",
-        default=False,
-        action="store_true",
-        help="Use approximations for non-linear functions",
-    )
-    parser.add_argument(
-        "--no-cmp",
-        default=False,
-        action="store_true",
-        help="Use LUTs for bounded functions without comparisons",
-    )
-    parser.add_argument(
         "--communication",
         default=False,
         action="store_true",
         help="Print communication statistics",
     )
     parser.add_argument(
-        "--with-cache",
+        "--fill-cache",
         default=False,
         action="store_true",
         help="Populate the cache and run with it",
@@ -74,7 +75,13 @@ def get_args():
         action="store_true",
         help="Skip embeddings and softmax",
     )
-    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'all']
+    parser.add_argument(
+        "--kv-cache",
+        type=int,
+        default=0,
+        help="Use key-value cache for this many new tokens",
+    )
+    models = ['GPT2', 'GPTNeo', 'BertTiny', 'BertBase', 'BertLarge', 'ModernBert', 'ModernBertLarge', 'Llama', 'Llama8B']
     parser.add_argument(
         "--model",
         choices=models,
@@ -102,17 +109,17 @@ def get_args():
 def get_config(args):
     cfg_file = curl.cfg.get_default_config_path()
     if args.approximations:
-        logging.info("Using Approximation Config:")
+        logging.info("Using Approximation Config")
         cfg_file = cfg_file.replace("default", "approximations")
-    elif args.no_cmp:
-        logging.info("Using config with LUTs without comparisons:")
-        cfg_file = cfg_file.replace("default", "llm_config")
+    elif args.evaluator_size:
+        logging.info("Using Fission Config")
+        cfg_file = cfg_file.replace("default", "fission")
     else:
         logging.info("Using LUTs Config:")
     return cfg_file
 
 def _run_experiment(args):
-    # only import here to initialize curl within the subprocesses
+    # Only import here to initialize curl within the subprocesses
     from examples.llms.llm import run_llm
 
     # Only Rank 0 will display logs.
@@ -120,11 +127,8 @@ def _run_experiment(args):
     if "RANK" in os.environ and os.environ["RANK"] != "0":
         level = logging.CRITICAL
     logging.getLogger().setLevel(level)
+    run_llm(args.tensor_size, args.model, args.fill_cache, args.communication, not args.not_full, args.device, args.kv_cache)
 
-    cfg_file = get_config(args)
-    run_llm(cfg_file, args.tensor_size, args.model, args.with_cache, args.communication, not args.not_full, args.device)
-
-    print('Done')
 
 def main():
     args = get_args()
@@ -135,7 +139,7 @@ def main():
         raise ValueError("Communication statistics are not available for TTP provider")
 
     if args.multiprocess:
-        launcher = MultiProcessLauncher(args.world_size, _run_experiment, args, cfg_file)
+        launcher = MultiProcessLauncher(args.world_size, args.evaluator_size, _run_experiment, args, cfg_file)
         launcher.start()
         launcher.join()
         launcher.terminate()

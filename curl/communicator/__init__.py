@@ -17,12 +17,12 @@ __use_threads = False
 def get():
     cls = InProcessCommunicator if __use_threads else DistributedCommunicator
     if not cls.is_initialized():
-        raise RuntimeError("Crypten not initialized. Please call curl.init() first.")
+        raise RuntimeError("Curl not initialized. Please call curl.init() first.")
 
     return cls.get()
 
 
-def _init(use_threads, rank=0, world_size=1, init_ttp=False):
+def _init(use_threads, rank=0, world_size=1, evaluator_size=0, init_ttp=False):
     global __tls, __use_threads
     __use_threads = use_threads
     cls = InProcessCommunicator if __use_threads else DistributedCommunicator
@@ -31,7 +31,7 @@ def _init(use_threads, rank=0, world_size=1, init_ttp=False):
         logging.info(f"Communicator is initialized")
         return
 
-    cls.initialize(rank, world_size, init_ttp=init_ttp)
+    cls.initialize(rank, world_size, evaluator_size, init_ttp=init_ttp)
 
 
 def uninit():

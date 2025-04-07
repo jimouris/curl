@@ -6,62 +6,56 @@ debug:
 encoder:
   precision_bits: 16
   trunc_method:
-    # prod: "crypten"
-    prod: "egk"
-    # lut: "crypten"
-    lut: "egk"
+     prod: "crypten"
 functions:
-  max_method: "log_reduction"
-
-  # exponential function
-  exp_method: "limit"
-  exp_iterations: 8
-
-  # log configuration
-  log_method: "iter"
-  log_iterations: 2
-  log_exp_iterations: 8
-  log_order: 8
-
-  # reciprocal configuration
-  reciprocal_method: "NR"
-  # reciprocal_method: "bior"
-  reciprocal_nr_iters: 10
-  reciprocal_log_iters: 1
-  reciprocal_all_pos: True
-  reciprocal_initial: null
-
-  # sqrt configuration
-  sqrt_method: "NR"
-  sqrt_nr_iters: 3
-  sqrt_nr_initial: null
-
-  # inv_sqrt configuration
-  inv_sqrt_method: "NR"
-
-  # sigmoid / tanh configuration
-  sigmoid_tanh_method: "reciprocal"
-  sigmoid_tanh_terms: 32
-
-  # trigonometry configuration
-  trigonometry_method: "NR"
-  trig_iterations: 10
-
-  # error function configuration:
-  erf_method: "Taylor"
-  erf_iterations: 8
-
-  # gelu configuration:
-  gelu_method: "erf"
-
-  # silu configuration:
-  silu_method: "sigmoid"
+  max:
+    method: "log_reduction"
+  exp:
+    method: "limit"
+    iterations: 8
+  log:
+    method: "iter"
+    iterations: 2
+    exp_iterations: 8
+    order: 8
+  reciprocal:
+    method: "NR"
+    nr_iters: 10
+    log_iters: 1
+    all_pos: True
+    initial: null
+  sqrt:
+    method: "NR"
+    nr_iters: 3
+    nr_initial: null
+  inv_sqrt:
+    method: "NR"
+  sigmoid_tanh:
+    method: "reciprocal"
+    terms: 32
+  trigonometry:
+    method: "NR"
+    iterations: 10
+  erf:
+    method: "Taylor"
+    iterations: 8
+  gelu:
+    method: "erf"
+  silu:
+    method: "sigmoid"
+  softmax:
+    method: "approximation"
+  log_softmax:
+    method: "approximation"
 mpc:
   active_security: False
-  provider: "TFP"
+  provider: "TTP"
   protocol: "beaver"
+  jax: False
 nn:
   dpsmpc:
     protocol: "layer_estimation"
     skip_loss_forward: True
     cache_pred_size: True
+  gradients:
+    layernorm: "normal"

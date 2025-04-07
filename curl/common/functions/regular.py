@@ -16,6 +16,7 @@ __all__ = [  # noqa: F822
     "__len__",
     "__setitem__",
     "cat",
+    "chunk",
     "cumsum",
     "dim",
     "dot",
@@ -126,6 +127,14 @@ def unbind(self, dim=0):
 
 def split(self, split_size, dim=0):
     tensors = self._tensor.split(split_size, dim=dim)
+    results = tuple(self.shallow_copy() for _ in range(len(tensors)))
+    for i in range(len(tensors)):
+        results[i]._tensor = tensors[i]
+    return results
+
+
+def chunk(self, chunks, dim=0):
+    tensors = self._tensor.chunk(chunks, dim=dim)
     results = tuple(self.shallow_copy() for _ in range(len(tensors)))
     for i in range(len(tensors)):
         results[i]._tensor = tensors[i]

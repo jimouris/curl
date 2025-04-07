@@ -18,7 +18,8 @@ from curl.cryptensor import CrypTensor
 from curl.cuda import CUDALongTensor
 from curl.encoder import FixedPointEncoder
 
-from . import beaver, replicated  # noqa: F401
+from . import beaver, plaintext, replicated  # noqa: F401
+from .util import IgnoreEncodings
 
 
 SENTINEL = -1
@@ -199,7 +200,7 @@ class ArithmeticSharedTensor:
 
     def clone(self):
         result = ArithmeticSharedTensor(src=SENTINEL)
-        result.encoder = self.encoder
+        result.encoder = FixedPointEncoder(precision_bits=self.encoder.precision_bits)
         result._tensor = self._tensor.clone()
         return result
 
@@ -318,7 +319,7 @@ class ArithmeticSharedTensor:
         else:
             scale_factor = self.encoder.scale // new_encoder.scale
             self = self.div_(scale_factor)
-        self.encoder = new_encoder
+        self.encoder._precision_bits = new_encoder.precision_bits
         return self
 
     def encode(self, new_encoder):
@@ -359,6 +360,10 @@ class ArithmeticSharedTensor:
             result = self.clone()
 
         if public:
+            if ((not additive_func) and cfg.encoder.trunc_method.prod == "fission"
+                    and result.encoder.precision_bits > cfg.encoder.precision_bits):
+                result = result.egk_trunc_pr(62, result.encoder.precision_bits - cfg.encoder.precision_bits)
+                result.encoder._precision_bits = cfg.encoder.precision_bits
             y = result.encoder.encode(y, device=self.device)
 
             if additive_func:  # ['add', 'sub']
@@ -379,6 +384,13 @@ class ArithmeticSharedTensor:
                     result.encode_as_(y)
                 result.share = getattr(result.share, op)(y.share)
             else:  # ['mul', 'matmul', 'convNd', 'conv_transposeNd']
+                if cfg.encoder.trunc_method.prod == "fission":
+                    if result.encoder.precision_bits > cfg.encoder.precision_bits:
+                        result = result.egk_trunc_pr(62, result.encoder.precision_bits - cfg.encoder.precision_bits)
+                        result.encoder._precision_bits = cfg.encoder.precision_bits
+                    if y.encoder.precision_bits > cfg.encoder.precision_bits:
+                        y = y.egk_trunc_pr(62, y.encoder.precision_bits - cfg.encoder.precision_bits)
+                        y.encoder._precision_bits = cfg.encoder.precision_bits
                 protocol = globals()[cfg.mpc.protocol]
                 result.share.set_(
                     getattr(protocol, op)(result, y, *args, **kwargs).share.data
@@ -390,23 +402,32 @@ class ArithmeticSharedTensor:
         if not additive_func:
             if public:  # scale by self.encoder.scale
                 if self.encoder.scale > 1:
-                    if cfg.encoder.trunc_method.prod == "crypten":
-                        return result.div_(result.encoder.scale)
-                    else:
-                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
+                    match cfg.encoder.trunc_method.prod:
+                        case "crypten":
+                            return result.div_(result.encoder.scale)
+                        case "egk":
+                            return result.egk_trunc_pr(62, result.encoder.precision_bits)
+                        case "fission":
+                            result.encoder._precision_bits = 2 * result.encoder.precision_bits
+                            return result
+                        case _:
+                            raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
                 else:
-                    result.encoder = self.encoder
+                    result.encoder._precision_bits = self.encoder.precision_bits
             else:  # scale by larger of self.encoder.scale and y.encoder.scale
-                if self.encoder.scale > 1 and y.encoder.scale > 1:
-                    if cfg.encoder.trunc_method.prod == "crypten":
-                        return result.div_(result.encoder.scale)
-                    else:
-                        return result.egk_trunc_pr(62, result.encoder._precision_bits)
-                elif self.encoder.scale > 1:
-                    result.encoder = self.encoder
-                else:
-                    result.encoder = y.encoder
-
+                if result.encoder.scale > 1 and y.encoder.scale > 1:
+                    match cfg.encoder.trunc_method.prod:
+                        case "crypten":
+                            return result.div_(result.encoder.scale)
+                        case "egk":
+                            return result.egk_trunc_pr(62, result.encoder.precision_bits)
+                        case "fission":
+                            result.encoder._precision_bits = result.encoder.precision_bits + y.encoder.precision_bits
+                            return result
+                        case _:
+                            raise ValueError(f"Unsupported truncation method {cfg.encoder.trunc_method.prod}")
+                elif y.encoder.scale > 1:
+                    result.encoder._precision_bits = y.encoder.precision_bits
         return result
 
     def add(self, y):
@@ -514,7 +535,7 @@ class ArithmeticSharedTensor:
 
     def egk_truncmod_pr(self, l, m):
         divisor = self.egk_trunc_pr(l, m)
-        with beaver.IgnoreEncodings([self, divisor]):
+        with IgnoreEncodings([self, divisor]):
             remainder = self - divisor * 2**m
         return divisor, remainder
 
@@ -655,7 +676,20 @@ class ArithmeticSharedTensor:
         """Evaluate a embedding on the input tensor."""
         protocol = globals()[cfg.mpc.protocol]
         self.share = protocol.evaluate_embed(self, embed.share).share
-        self.encoder._precision_bits = embed.encoder._precision_bits
+        self.encoder._precision_bits = embed.encoder.precision_bits
+        return self
+
+    def shuffle(self):
+        """Shuffle the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        result, inv_permutation = protocol.shuffle(self)
+        self.share = result.share
+        return self, inv_permutation
+
+    def unshuffle(self, inv_permutation):
+        """Unshuffle the input tensor."""
+        protocol = globals()[cfg.mpc.protocol]
+        self.share = protocol.unshuffle(self, inv_permutation).share
         return self
 
     def where(self, condition, y):

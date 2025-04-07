@@ -5,28 +5,20 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import logging
 import curl
 import curl.communicator as comm
+import jax
+import jax.numpy as jnp
 import torch
+
 from curl.common.util import count_wraps
 from curl.config import cfg
+from jax.lib import xla_bridge
 
+from .util import IgnoreEncodings
 
-class IgnoreEncodings:
-    """Context Manager to ignore tensor encodings"""
-
-    def __init__(self, list_of_tensors):
-        self.list_of_tensors = list_of_tensors
-        self.encodings_cache = [tensor.encoder.scale for tensor in list_of_tensors]
-
-    def __enter__(self):
-        for tensor in self.list_of_tensors:
-            tensor.encoder._scale = 1
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        for i, tensor in enumerate(self.list_of_tensors):
-            tensor.encoder._scale = self.encodings_cache[i]
+jax.config.update("jax_enable_x64", True)
+xla_bridge.get_backend().platform
 
 
 def __beaver_protocol(op, x, y, *args, **kwargs):
@@ -79,10 +71,35 @@ def __beaver_protocol(op, x, y, *args, **kwargs):
     with IgnoreEncodings([a, b, x, y]):
         epsilon, delta = ArithmeticSharedTensor.reveal_batch([x - a, y - b])
 
-    # z = c + (a * delta) + (epsilon * b) + epsilon * delta
-    c._tensor += getattr(torch, op)(epsilon, b._tensor, *args, **kwargs)
-    c._tensor += getattr(torch, op)(a._tensor, delta, *args, **kwargs)
-    c += getattr(torch, op)(epsilon, delta, *args, **kwargs)
+    if cfg.mpc.jax:
+        device = jax.devices("cpu")[0]
+        if x.device.type == "cuda":
+            device = jax.devices("cuda")[x.device.index]
+
+    if cfg.mpc.jax and op == "matmul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=device)
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=device)
+        z = jnp.matmul(epsilon, b) + jnp.matmul(a, delta)
+        if comm.get().get_rank() == 0:
+            z += jnp.matmul(epsilon, delta)
+        c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
+    elif cfg.mpc.jax and op == "mul":
+        epsilon = jnp.array(epsilon.data, dtype=jnp.int64, device=device)
+        delta = jnp.array(delta.data, dtype=jnp.int64, device=device)
+        a = jnp.array(a._tensor.data, dtype=jnp.int64, device=device)
+        b = jnp.array(b._tensor.data, dtype=jnp.int64, device=device)
+        z = jnp.multiply(epsilon, b) + jnp.multiply(a, delta)
+        if comm.get().get_rank() == 0:
+            z += jnp.multiply(epsilon, delta)
+        c._tensor += torch.utils.dlpack.from_dlpack(jax.dlpack.to_dlpack(z))
+    else:
+        # z = c + (a * delta) + (epsilon * b) + epsilon * delta
+        c._tensor += getattr(torch, op)(epsilon, b._tensor, *args, **kwargs)
+        c._tensor += getattr(torch, op)(a._tensor, delta, *args, **kwargs)
+        if comm.get().get_rank() == 0:
+            c._tensor += getattr(torch, op)(epsilon, delta, *args, **kwargs)
 
     return c
 
@@ -331,6 +348,17 @@ def evaluate_embed(x, embed):
         lookup = one_hot_r.matmul(embed)
     result = lookup.reshape(shape)
     return result
+
+
+def shuffle(x):
+    provider = curl.mpc.get_default_provider()
+    permutation, inv_permutation = provider.generate_permutation(x.size(0), device=x.device)
+    result = x[permutation]
+    return result, inv_permutation
+
+
+def unshuffle(x, inv_permutation):
+    return x[inv_permutation]
 
 
 def AND(x, y):

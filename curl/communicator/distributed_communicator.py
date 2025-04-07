@@ -6,17 +6,17 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import numpy
 import os
 import pickle
 import random
 import string
-
-import numpy
+import threading
 import torch
-import torch.distributed as dist
-from curl.common import serial
-from torch.distributed import ReduceOp
 
+from curl.common import serial
+from torch import distributed as dist
+from torch.distributed import ReduceOp
 from .communicator import _logging, Communicator
 
 
@@ -34,27 +34,26 @@ class DistributedCommunicator(Communicator):
         # no need to do anything if we already initialized the communicator:
         if not dist.is_initialized():
             # get configuration variables from environments:
-            for key in ["distributed_backend", "rendezvous", "world_size", "rank"]:
+            for key in ["distributed_backend", "rendezvous", "world_size", "evaluator_size", "rank"]:
                 if key.upper() not in os.environ:
                     raise ValueError("Environment variable %s must be set." % key)
                 setattr(self, key.lower(), os.environ[key.upper()])
 
             # make sure world size and rank are integers; comms stats are reset:
             self.world_size = int(self.world_size)
+            self.evaluator_size = int(self.evaluator_size)
             self.rank = int(self.rank)
             self.reset_communication_stats()
             self._name = f"rank{self.rank}"
 
             # initialize process group:
             total_ws = self.world_size + 1 if init_ttp else self.world_size
-            logging.info(f"DistributedCommunicator ({self.rank}): Total world size {total_ws}, init_ttp: {init_ttp}")
-            logging.info(f"distributed_backend ({self.rank}): {self.distributed_backend}")
-            logging.info(f"rendezvous ({self.rank}): {self.rendezvous}")
+            logging.info(f"[Party {self.rank}][Distributed Com] Total WS: {total_ws}, TTP: {init_ttp}, Backend: {self.distributed_backend}, rendezvous: {self.rendezvous}")
 
             dist.init_process_group(
                 backend=self.distributed_backend,
                 init_method=self.rendezvous,
-                world_size=total_ws,
+                world_size=total_ws + self.evaluator_size,
                 rank=self.rank,
             )
 
@@ -62,6 +61,8 @@ class DistributedCommunicator(Communicator):
             if total_ws > 1:
                 self.ttp_comm_group = dist.new_group([0, total_ws - 1])
             self.main_group = dist.new_group(list(range(self.world_size)))
+            self.eval_groups = [[dist.new_group([i, j]) for j in range(total_ws, total_ws + self.evaluator_size)] for i in range(self.world_size)]
+            self.eval_comm_group = dist.new_group([0] + list(range(total_ws, total_ws + self.evaluator_size)))
             self.ttp_initialized = init_ttp
 
     @classmethod
@@ -71,7 +72,7 @@ class DistributedCommunicator(Communicator):
         return dist.is_initialized()
 
     @classmethod
-    def initialize(cls, rank, world_size, init_ttp=False):
+    def initialize(cls, rank, world_size, evaluator_size, init_ttp=False):
         import os
 
         if os.name == "nt":
@@ -88,6 +89,7 @@ class DistributedCommunicator(Communicator):
             "DISTRIBUTED_BACKEND": "gloo",
             "RENDEZVOUS": f"file:///tmp/{randomized_path}",
             "WORLD_SIZE": world_size,
+            "EVALUATOR_SIZE": evaluator_size,
             "RANK": rank,
         }
         for key, val in default_args.items():
@@ -108,34 +110,43 @@ class DistributedCommunicator(Communicator):
             )
         dist.destroy_process_group(cls.instance.main_group)
         dist.destroy_process_group(cls.instance.ttp_group)
+        dist.destroy_process_group(cls.instance.eval_group)
         dist.destroy_process_group()
         cls.instance = None
 
     @_logging
-    def send(self, tensor, dst):
+    def send(self, tensor, dst, group=None):
         """Sends the specified tensor to the destination dst."""
         assert dist.is_initialized(), "initialize the communicator first"
-        dist.send(tensor.data, dst, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        dist.send(tensor.data, dst, group=group)
 
     @_logging
-    def recv(self, tensor, src=None):
+    def recv(self, tensor, src=None, group=None):
         """Receives a tensor from an (optional) source src."""
         assert dist.is_initialized(), "initialize the communicator first"
+        if group is None:
+            group = self.main_group
         result = tensor.clone()
-        dist.recv(result.data, src=src, group=self.main_group)
+        dist.recv(result.data, src=src, group=group)
         return result
 
     @_logging
-    def isend(self, tensor, dst):
+    def isend(self, tensor, dst, group=None):
         """Sends the specified tensor to the destination dst."""
         assert dist.is_initialized(), "initialize the communicator first"
-        return dist.isend(tensor.data, dst, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        return dist.isend(tensor.data, dst, group=group)
 
     @_logging
-    def irecv(self, tensor, src=None):
+    def irecv(self, tensor, src=None, group=None):
         """Receives a tensor from an (optional) source src."""
         assert dist.is_initialized(), "initialize the communicator first"
-        return dist.irecv(tensor.data, src=src, group=self.main_group)
+        if group is None:
+            group = self.main_group
+        return dist.irecv(tensor.data, src=src, group=group)
 
     @_logging
     def scatter(self, scatter_list, src, size=None, device=None):
@@ -259,6 +270,33 @@ class DistributedCommunicator(Communicator):
         return input
 
     @_logging
+    def broadcast_parallel(self, inputs_list, src_list, groups_list):
+        """Broadcasts the tensor to all parties using parallel threads.
+
+        Args:
+            inputs_list (list): List of tensors to broadcast
+            src_list (list): List of source ranks for each broadcast
+            groups_list (list): List of groups for each broadcast
+        """
+        assert dist.is_initialized(), "initialize the communicator first"
+        assert len(inputs_list) == len(groups_list) == len(src_list), \
+            f"inputs_list {len(inputs_list)}, src_list {len(src_list)} and groups_list {len(groups_list)} must have same length"
+
+        # Create and start threads
+        threads = []
+        for tensor, src, group in zip(inputs_list, src_list, groups_list):
+            thread = threading.Thread(
+                target=dist.broadcast,
+                args=(tensor.data, src, group)
+            )
+            thread.start()
+            threads.append(thread)
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+    @_logging
     def barrier(self):
         """Synchronizes all processes.
 
@@ -326,6 +364,11 @@ class DistributedCommunicator(Communicator):
         """Returns the size of the world."""
         assert dist.is_initialized(), "initialize the communicator first"
         return self.world_size
+
+    def get_evaluators_size(self):
+        """Returns the size of the evaluators"""
+        assert dist.is_initialized(), "initialize the communicator first"
+        return self.evaluator_size
 
     def get_rank(self):
         """Returns the rank of the current process."""

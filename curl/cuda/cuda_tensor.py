@@ -350,6 +350,11 @@ class CUDALongTensor:
         results = [CUDALongTensor(t) for t in results]
         return results
 
+    def chunk(self, y, *args, **kwargs):
+        chunks = self._tensor.chunk(y, *args, **kwargs)
+        chunks = [CUDALongTensor(chunk) for chunk in chunks]
+        return chunks
+
     def split(self, y, *args, **kwargs):
         splits = self._tensor.split(y, *args, **kwargs)
         splits = [CUDALongTensor(split) for split in splits]

@@ -300,11 +300,11 @@ class CrypTensor(object, metaclass=CrypTensorMetaclass):
         if func in STATIC_FUNCTION_MAPPING:
             import curl
 
-            # dispatch torch.{cat,stack} call on CrypTensor to CrypTen:
-            return getattr(crypten, STATIC_FUNCTION_MAPPING[func])(*args, **kwargs)
+            # dispatch torch.{cat,stack} call on CrypTensor to Curl:
+            return getattr(curl, STATIC_FUNCTION_MAPPING[func])(*args, **kwargs)
         else:
             raise NotImplementedError(
-                f"CrypTen does not support torch function {func}."
+                f"Curl does not support torch function {func}."
             )
 
     def _get_forward_function_no_ctx(self, grad_fn):

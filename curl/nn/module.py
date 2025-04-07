@@ -10,7 +10,6 @@ import warnings
 from collections import OrderedDict
 
 import curl
-import math
 import torch
 import torch.onnx.symbolic_helper as sym_help
 from curl.common.functions.pooling import _adaptive_pool2d_helper
@@ -124,7 +123,8 @@ class Module:
         """
         if name in self._parameters or hasattr(self, name):
             raise ValueError("Parameter or field %s already exists." % name)
-        param.requires_grad = requires_grad
+        if requires_grad:
+            param.requires_grad = requires_grad
         self._parameters[name] = param
         setattr(self, name, param)
 
@@ -1965,36 +1965,6 @@ class MatMul(Module):
         return MatMul()
 
 
-class Attention(Module):
-    def __init__(self, embed_dim, num_heads):
-        super(Attention, self).__init__()
-
-        assert embed_dim % num_heads == 0, "invalid heads and embedding dimension"
-
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.search_dim = embed_dim // num_heads
-
-        self.search = Linear(embed_dim, 3 * embed_dim)
-        self.proj = Linear(embed_dim, embed_dim)
-
-    def forward(self, x):
-        batch_size = x.shape[0]
-        seq_len = x.shape[1]
-
-        query, key, value = self.search(x).split(self.embed_dim, dim=2)
-        query = query.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
-        key = key.reshape(batch_size, seq_len, self.num_heads, self.search_dim).permute(0, 2, 3, 1)
-        value = value.reshape(batch_size, seq_len, self.num_heads, self.search_dim).transpose(1, 2)
-
-        attn = query.matmul(key) / math.sqrt(query.size(-1))
-        attn = attn.softmax(dim=-1)
-
-        y = attn.matmul(value).transpose(1, 2).reshape(batch_size, seq_len, self.embed_dim)
-        y = self.proj(y)
-        return y
-
-
 class Embedding(Module):
     def __init__(self, vocab_size, embed_dim):
         super(Embedding, self).__init__()
@@ -2939,13 +2909,14 @@ class LayerNormalization(Module):
         )
 
 class LayerNorm(Module):
-    def __init__(self, shape, eps=1e-05):
+    def __init__(self, shape, eps=1e-05, bias=True):
         super().__init__()
 
         # initialize model parameters and buffers:
         pytorch_module = torch.nn.LayerNorm(shape, eps)
-        for param in ["weight", "bias"]:
-            self.register_parameter(param, getattr(pytorch_module, param))
+        self.register_parameter("weight", getattr(pytorch_module, "weight"))
+        if bias:
+            self.register_parameter("bias", getattr(pytorch_module, "bias"))
 
         # set model attributes:
         self.eps = eps
@@ -2954,9 +2925,13 @@ class LayerNorm(Module):
         self.inv_var = None
 
     def forward(self, input):
+        if hasattr(self, "bias"):
+            bias = self.bias
+        else:
+            bias = 0
         return input.layernorm(
             self.weight,
-            self.bias,
+            bias,
             training=self.training,
             eps=self.eps,
             inv_var=self.inv_var,

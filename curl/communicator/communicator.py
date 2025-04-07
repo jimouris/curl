@@ -103,6 +103,10 @@ class Communicator:
         """Returns the size of the world."""
         raise NotImplementedError("get_world_size is not implemented")
 
+    def get_evaluator_size(self):
+        """Returns the size of the eval."""
+        raise NotImplementedError("get_evaluator_size is not implemented")
+
     def get_rank(self):
         """Returns the rank of the current process."""
         raise NotImplementedError("get_rank is not implemented")
@@ -120,23 +124,37 @@ class Communicator:
         self.comm_rounds = 0
         self.comm_bytes = 0
         self.comm_time = 0
+        self.eval_comm_rounds = 0
+        self.eval_comm_bytes = 0
+        self.eval_comm_time = 0
 
     def print_communication_stats(self):
         """Prints communication statistics."""
         import curl
 
         curl.log("====Communication Stats====")
-        curl.log("Rounds: {}".format(self.comm_rounds))
-        curl.log("Bytes : {}".format(self.comm_bytes))
-        curl.log("Comm time: {}".format(self.comm_time))
+        curl.log("MPC  Rounds: {}".format(self.comm_rounds))
+        curl.log("MPC  Bytes : {}".format(self.comm_bytes))
+        curl.log("MPC  Comm time: {}".format(self.comm_time))
+        curl.log("Eval Rounds: {}".format(self.eval_comm_rounds))
+        curl.log("Eval Bytes : {}".format(self.eval_comm_bytes))
+        curl.log("Eval Comm time: {}".format(self.eval_comm_time))
 
     def _log_communication(self, nelement):
         """Updates log of communication statistics."""
         self.comm_rounds += 1
         self.comm_bytes += nelement * self.BYTES_PER_ELEMENT
 
+    def _log_eval_communication(self, nelement):
+        """Updates log of communication statistics."""
+        self.eval_comm_rounds += 1
+        self.eval_comm_bytes += nelement * self.BYTES_PER_ELEMENT
+
     def _log_communication_time(self, comm_time):
         self.comm_time += comm_time
+
+    def _log_eval_communication_time(self, comm_time):
+        self.eval_comm_time += comm_time
 
     def get_generator(self, idx, device=None):
         """
@@ -185,6 +203,11 @@ def _logging(func):
                 self._log_communication(0, 1)
             elif func.__name__ == "scatter":  # N - 1 tensors communicated
                 self._log_communication(args[0][0].nelement() * (len(args[0]) - 1))
+            elif func.__name__ == "broadcast_parallel":
+                for arg in args[0]:
+                    self._log_eval_communication(arg.nelement())
+            elif func.__name__ == "send_obj":
+                self._log_eval_communication(3)
             elif "batched" in kwargs and kwargs["batched"]:
                 nbytes = sum(x.nelement() for x in args[0])
                 self._log_communication(nbytes)
@@ -195,7 +218,10 @@ def _logging(func):
             result = func(self, *args, **kwargs)
             toc = timeit.default_timer()
 
-            self._log_communication_time(toc - tic)
+            if func.__name__ in ("broadcast_parallel", "send_obj"):
+                self._log_eval_communication_time(toc - tic)
+            else:
+                self._log_communication_time(toc - tic)
             return result
 
         return func(self, *args, **kwargs)
